@@ -1,5 +1,5 @@
-   0.082965357s  INFO prepare_target{force=false package_id=ducky-rs v0.1.0 (/home/hect/Rusty-Ducky) target="ducky"}: cargo::core::compiler::fingerprint: fingerprint error for ducky-rs v0.1.0 (/home/hect/Rusty-Ducky)/Check { test: true }/TargetInner { name: "ducky", doc: true, ..: with_path("/home/hect/Rusty-Ducky/src/main.rs", Edition2021) }
-   0.082987940s  INFO prepare_target{force=false package_id=ducky-rs v0.1.0 (/home/hect/Rusty-Ducky) target="ducky"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hect/Rusty-Ducky/target/thumbv6m-none-eabi/debug/.fingerprint/ducky-rs-a70c9c9322166abe/test-bin-ducky`
+   0.093238352s  INFO prepare_target{force=false package_id=ducky-rs v0.1.0 (/home/hect/Rusty-Ducky) target="ducky"}: cargo::core::compiler::fingerprint: fingerprint error for ducky-rs v0.1.0 (/home/hect/Rusty-Ducky)/Check { test: true }/TargetInner { name: "ducky", doc: true, ..: with_path("/home/hect/Rusty-Ducky/src/main.rs", Edition2021) }
+   0.093259533s  INFO prepare_target{force=false package_id=ducky-rs v0.1.0 (/home/hect/Rusty-Ducky) target="ducky"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hect/Rusty-Ducky/target/thumbv6m-none-eabi/debug/.fingerprint/ducky-rs-a70c9c9322166abe/test-bin-ducky`
 
 Caused by:
     No such file or directory (os error 2)
