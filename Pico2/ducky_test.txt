@@ -1,0 +1,2 @@
+rnotepad
+Hello from ducky-rs!

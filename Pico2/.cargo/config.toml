@@ -1,0 +1,7 @@
+[build]
+target = "thumbv8m.main-none-eabihf"
+
+[env]
+DEFMT_LOG = "debug"
+EMBASSY_USB_MAX_INTERFACE_COUNT = "8"
+EMBASSY_USB_MAX_HANDLER_COUNT = "8"

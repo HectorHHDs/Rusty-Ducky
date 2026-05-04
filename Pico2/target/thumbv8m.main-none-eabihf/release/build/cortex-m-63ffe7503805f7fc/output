@@ -1,0 +1,6 @@
+cargo:rustc-link-lib=static=cortex-m
+cargo:rustc-link-search=/home/hect/Rusty-Ducky/Pico2/target/thumbv8m.main-none-eabihf/release/build/cortex-m-63ffe7503805f7fc/out
+cargo:rustc-cfg=cortex_m
+cargo:rustc-cfg=armv8m
+cargo:rustc-cfg=armv8m_main
+cargo:rustc-cfg=has_fpu

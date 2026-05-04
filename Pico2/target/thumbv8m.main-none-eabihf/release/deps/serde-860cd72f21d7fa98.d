@@ -1,0 +1,14 @@
+/home/hect/Rusty-Ducky/Pico2/target/thumbv8m.main-none-eabihf/release/deps/serde-860cd72f21d7fa98.d: /home/hect/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/hect/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/hect/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/hect/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/hect/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /home/hect/Rusty-Ducky/Pico2/target/thumbv8m.main-none-eabihf/release/build/serde-a5a6cc1a071ef4f0/out/private.rs
+
+/home/hect/Rusty-Ducky/Pico2/target/thumbv8m.main-none-eabihf/release/deps/libserde-860cd72f21d7fa98.rlib: /home/hect/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/hect/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/hect/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/hect/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/hect/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /home/hect/Rusty-Ducky/Pico2/target/thumbv8m.main-none-eabihf/release/build/serde-a5a6cc1a071ef4f0/out/private.rs
+
+/home/hect/Rusty-Ducky/Pico2/target/thumbv8m.main-none-eabihf/release/deps/libserde-860cd72f21d7fa98.rmeta: /home/hect/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/hect/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/hect/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/hect/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/hect/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /home/hect/Rusty-Ducky/Pico2/target/thumbv8m.main-none-eabihf/release/build/serde-a5a6cc1a071ef4f0/out/private.rs
+
+/home/hect/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/home/hect/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/home/hect/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/home/hect/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/home/hect/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/home/hect/Rusty-Ducky/Pico2/target/thumbv8m.main-none-eabihf/release/build/serde-a5a6cc1a071ef4f0/out/private.rs:
+
+# env-dep:OUT_DIR=/home/hect/Rusty-Ducky/Pico2/target/thumbv8m.main-none-eabihf/release/build/serde-a5a6cc1a071ef4f0/out
