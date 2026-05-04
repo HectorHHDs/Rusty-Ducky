@@ -1,14 +1,16 @@
 # ducky-rs
 
-Rubber Ducky firmware for Raspberry Pi Pico, written in Rust with Embassy.
+Rubber Ducky firmware for Raspberry Pi Pico, written in Rust with ~~Embassy~~ My own usb descriptor module WITH Embassy-usb
+
+*The following is documentation on the tested Raspberry Pi Pico 1 build, the Pico 2 build is slightly different but not in any big ways.*
 
 Implements the full DuckyScript 3.0 interpreter from the original CircuitPython
-`duckyinpython.py` project, plus exclusive features not possible in CircuitPython:
+`pico-ducky` project, plus exclusive features not possible in CircuitPython:
 
-- **ATTACKMODE HID+STORAGE** — when an SD card is soldered to SPI0, the Pico
-  presents itself as both a USB keyboard *and* a removable USB drive simultaneously
-- **Serial payload manager** — upload/edit/run/delete `.dd` files over serial
-  without reflashing, on any Pico (no WiFi required)
+- **ATTACKMODE HID+STORAGE** — when an SD card is soldered using the guide down below, the Pico
+  presents itself as both a USB keyboard *and* a removable USB drive simultaneously if the payload runs ATTACKMODE HID STORAGE or ATTACKMODE HID CDC STORAGE
+- **Serial payload manager** — upload/edit/run/delete `.dd` files over serial. Use PuTTY to access it on windows, and screen /dev/ttyACM* on Debian-based/ubuntu-based linux distros;
+  without reflashing, on any Pico or Pico 2 (no WiFi required)
 - **LED exfil monitor** — covert data channel via host lock-key LED toggles
 
 ---
@@ -24,24 +26,19 @@ Implements the full DuckyScript 3.0 interpreter from the original CircuitPython
 | GP11 | Payload 4 select  | Short to GND = payload4.dd                                            |
 | GP0  | Programming mode  | Short to GND = don't run payload, defaults to ATTACKMODE TERMINAL     |
 
-SD Card Module    Pico GPIO    Pico Physical Pin
-─────────────────────────────────────────────────
-VCC (3.3V)    →  3V3          Pin 36
-GND           →  GND          Pin 38 (or any GND)
-MISO (DO)     →  GP16         Pin 21
-CS  (SS)      →  GP17         Pin 22
-SCK (CLK)     →  GP18         Pin 24
-MOSI (DI)     →  GP19         Pin 25
-**SD card is fully optional.**
 
 ## How to install an SD card onto your pico:
 
-CLK / SCK -> GP18
-MOSI / DI -> GP19
-MISO / DO -> GP16
-CS / SS -> GP17
-VCC -> 3V3 (OUT)
-GND -> GND, Pin 38 works
+| SD Card Module | Pico GPIO   | Pico Physical Pin  |
+|----------------|-------------|--------------------|
+| VCC (3.3V)  -> |3V3          |Pin 36              |
+| GND         -> |GND          |Pin 38 (or any GND) |
+| MISO (DO)   -> |GP16         |Pin 21              |
+| CS  (SS)    -> |GP17         |Pin 22              |
+| SCK (CLK)   -> |GP18         |Pin 24              |
+| MOSI (DI)   -> |GP19         |Pin 25              |
+
+**SD card is fully optional.**
 
 A few notes:
 Use 3.3V not 5V. The Pico runs at 3.3V and so do most SD card modules. If you're using a bare SD card breakout (not a module), SD cards technically run on 3.3V natively so no level shifting is needed. If you're using a 5V Arduino-style SD module, it has its own regulator and level shifter on board — power it from VSYS (Pin 39, ~5V from USB) instead of 3V3, but still connect the signal lines directly to the GP pins.
@@ -114,11 +111,11 @@ cargo run --release
 
 On first boot, ducky-rs:
 
-1. Probes SPI0 for an SD card — sets HID-only or HID+STORAGE mode
+1. Probes SPI0 for an SD card — sets AttackMode based on payload - can be overridden to HID TERMINAL if GP0 pin is grounded, for development.
 2. Formats the internal LittleFS region if not already formatted
 3. Mounts the flash filesystem
 4. Waits 500ms for USB enumeration
-5. Checks GP0 — if pulled low, enters programming mode (no payload is activated)
+5. Checks GP0 — if pulled low, enters programming mode (no payload is activated, defaulted to ATTACKMODE HID TERMINAL)
 6. Reads GP4/5/10/11 — selects `payload.dd` through `payload4.dd`, by default it runs payload.dd
 7. Runs the selected payload (falls back to a built-in smoke test if no file)
 
@@ -298,41 +295,6 @@ Stubbed (fall back to US): ES, IT, PT, UK
 | SD present, GP15 floating     | HID + MSC          | Yes (USB drive) |
 | SD present, GP15 to GND       | HID only           | Yes (script only) |
 | GP0 to GND                    | HID only (no payload) | Yes        |
-
----
-
-## Project structure
-
-```
-ducky-rs/
-├── Cargo.toml            — dependencies + build profiles
-├── memory.x              — RP2040 flash layout (firmware + LittleFS)
-├── build.rs              — makes memory.x available to the linker
-├── README.md             — this file
-└── src/
-    ├── main.rs           — boot sequence, task spawning
-    ├── detection.rs      — SD card probe, Features flags
-    ├── hardware.rs       — LED task, button task, signals
-    ├── fs.rs             — LittleFS (flash) + FAT32 (SD) filesystems
-    ├── exfil.rs          — LED-based data exfil monitor
-    ├── mgmt.rs           — serial payload manager (webapp equivalent)
-    ├── ducky/
-    │   ├── mod.rs        — payload runner, filesystem integration
-    │   ├── executor.rs   — DuckyScript interpreter core (all control flow)
-    │   ├── parser.rs     — line dispatcher, HID command sender
-    │   ├── expr.rs       — expression evaluator (recursive descent)
-    │   └── keys.rs       — key name → HID keycode table
-    ├── usb/
-    │   ├── mod.rs        — USB device task, descriptor builder
-    │   ├── hid.rs        — HID keyboard + mouse reports
-    │   ├── cdc.rs        — CDC serial (WAIT_FOR_KEY data port)
-    │   └── msc.rs        — USB MSC / SCSI (SD-backed, optional)
-    └── layout/
-        ├── mod.rs        — layout dispatch + DUCKY_LANG switching
-        ├── us.rs         — US QWERTY layout
-        ├── de.rs         — German QWERTZ layout
-        └── fr.rs         — French AZERTY layout
-```
 
 ---
 
