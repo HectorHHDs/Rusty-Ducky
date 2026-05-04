@@ -2,6 +2,8 @@
 
 Rubber Ducky firmware for Raspberry Pi Pico, written in Rust with ~~Embassy~~ My own usb descriptor module WITH Embassy-usb
 
+*The following is documentation on the tested Raspberry Pi Pico 1 build, the Pico 2 build is slightly different but not in any big ways.*
+
 Implements the full DuckyScript 3.0 interpreter from the original CircuitPython
 `pico-ducky` project, plus exclusive features not possible in CircuitPython:
 
