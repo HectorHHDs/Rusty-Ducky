@@ -366,20 +366,6 @@ launch()
 
 ---
 
-## IMPORT
-**Run another script file inline, as if its contents were pasted here.**
-
-```
-IMPORT <filename>
-```
-
-```
-IMPORT setup.dd
-IMPORT exfil_payload.dd
-```
-
----
-
 ## RESTART_PAYLOAD
 **Stop execution and restart the script from the beginning.**
 
@@ -597,6 +583,7 @@ Optionally saves the key string (e.g. `"SHIFT+I"`, `";"`) to a variable.
 ```
 WAIT_FOR_KEY
 WAIT_FOR_KEY $VARIABLE
+WAIT_FOR_KEY $VARIABLE {wait time in ms for the keypress, before passing to next line}
 ```
 
 Key string format examples: `a`, `SHIFT+I`, `CTRL+C`, `ENTER`, `F5`, `;`, `SPACE`
@@ -815,6 +802,19 @@ REM macros compose with variables:
 DEFINE #CMD "powershell -w hidden"
 STRING #CMD -c whoami
 ENTER
+```
+
+---
+
+## ATTACKMODE
+**Sets the attackmode to HID, CDC, STORAGE, TERMINAL, or combinations of these.**
+`ATTACKMODE` Can be switched during runtime, but it will reboot the pico whenever the ATTACKMODE is switched, so it is heavily advised to set it only once during the script.
+
+```
+ATTACKMODE HID
+REM this attackmode blocks access to the terminal, and does not use storage nor CDC (CDC is required for WAIT_FOR_BUTTON and WAIT_FOR_KEY, along with the key_listener.py script running on host.
+DELAY 500
+STRING this is in HID mode! so you can't edit it until you connect GND to GP0, which defaults to ATTACKMODE HID CDC TERMINAL
 ```
 
 ---
