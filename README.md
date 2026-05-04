@@ -298,41 +298,6 @@ Stubbed (fall back to US): ES, IT, PT, UK
 
 ---
 
-## Project structure
-
-```
-ducky-rs/
-├── Cargo.toml            — dependencies + build profiles
-├── memory.x              — RP2040 flash layout (firmware + LittleFS)
-├── build.rs              — makes memory.x available to the linker
-├── README.md             — this file
-└── src/
-    ├── main.rs           — boot sequence, task spawning
-    ├── detection.rs      — SD card probe, Features flags
-    ├── hardware.rs       — LED task, button task, signals
-    ├── fs.rs             — LittleFS (flash) + FAT32 (SD) filesystems
-    ├── exfil.rs          — LED-based data exfil monitor
-    ├── mgmt.rs           — serial payload manager (webapp equivalent)
-    ├── ducky/
-    │   ├── mod.rs        — payload runner, filesystem integration
-    │   ├── executor.rs   — DuckyScript interpreter core (all control flow)
-    │   ├── parser.rs     — line dispatcher, HID command sender
-    │   ├── expr.rs       — expression evaluator (recursive descent)
-    │   └── keys.rs       — key name → HID keycode table
-    ├── usb/
-    │   ├── mod.rs        — USB device task, descriptor builder
-    │   ├── hid.rs        — HID keyboard + mouse reports
-    │   ├── cdc.rs        — CDC serial (WAIT_FOR_KEY data port)
-    │   └── msc.rs        — USB MSC / SCSI (SD-backed, optional)
-    └── layout/
-        ├── mod.rs        — layout dispatch + DUCKY_LANG switching
-        ├── us.rs         — US QWERTY layout
-        ├── de.rs         — German QWERTZ layout
-        └── fr.rs         — French AZERTY layout
-```
-
----
-
 ## Flash memory layout
 
 ```
