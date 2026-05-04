@@ -1,0 +1,47 @@
+[package]
+name    = "ducky-rs"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "ducky"
+path = "src/main.rs"
+
+[profile.release]
+opt-level     = "z"
+lto           = true
+codegen-units = 1
+debug         = false
+panic         = "abort"
+
+[profile.dev]
+opt-level = 1
+debug     = true
+panic     = "abort"
+
+[dependencies]
+
+embassy-rp = { path = "/home/hect/embassy/embassy-rp", features = [
+    "defmt", "unstable-pac", "time-driver", "critical-section-impl", "rp2040",
+] }
+embassy-executor = { path = "/home/hect/embassy/embassy-executor", features = [
+    "platform-cortex-m", "executor-thread", "executor-interrupt", "defmt",
+] }
+embassy-time    = { path = "/home/hect/embassy/embassy-time",    features = ["defmt", "defmt-timestamp-uptime"] }
+embassy-sync    = { path = "/home/hect/embassy/embassy-sync",    features = ["defmt"] }
+embassy-usb     = { path = "/home/hect/embassy/embassy-usb",     features = ["defmt", "max-interface-count-8", "max-handler-count-8"] }
+embassy-futures = { path = "/home/hect/embassy/embassy-futures" }
+
+cortex-m-rt = "0.7"
+cortex-m    = { version = "0.7", features = ["inline-asm"] }
+panic-probe = { version = "0.3", features = ["print-defmt"] }
+defmt       = "0.3"
+defmt-rtt   = "0.4"
+static_cell = "2"
+heapless    = "0.8"
+embedded-hal           = { version = "1.0" }
+embedded-hal-bus       = { version = "0.2" }
+embedded-storage       = "0.3"
+embedded-storage-async = "0.4"
+embedded-sdmmc         = { version = "0.7", default-features = false }
+portable-atomic        = { version = "1", features = ["critical-section"] }

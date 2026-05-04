@@ -1,0 +1,6 @@
+cargo:rustc-link-search=/home/hect/Rusty-Ducky/target/thumbv6m-none-eabi/release/build/ducky-rs-34536584e363f7b8/out
+cargo:rerun-if-changed=memory.x
+cargo:rustc-link-arg-bins=--nmagic
+cargo:rustc-link-arg-bins=-Tlink.x
+cargo:rustc-link-arg-bins=-Tlink-rp.x
+cargo:rustc-link-arg-bins=-Tdefmt.x

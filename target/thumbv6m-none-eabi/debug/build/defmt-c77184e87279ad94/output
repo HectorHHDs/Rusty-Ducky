@@ -1,0 +1,4 @@
+cargo:rustc-link-search=/home/hect/Little-Ducky/target/thumbv6m-none-eabi/debug/build/defmt-c77184e87279ad94/out
+cargo:rustc-cfg=no_cas
+cargo:rustc-check-cfg=cfg(c_variadic)
+cargo:rustc-check-cfg=cfg(no_cas)

@@ -1,0 +1,3 @@
+cargo:rustc-link-search=/home/hect/Rusty-Ducky/target/thumbv6m-none-eabi/release/build/rp-pac-4f555a4059ecf614/out
+cargo:rerun-if-changed=device.x
+cargo:rerun-if-changed=build.rs

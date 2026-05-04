@@ -1,0 +1,3 @@
+cargo:rustc-link-search=/home/hect/Little-Ducky/target/thumbv6m-none-eabi/debug/build/rp-pac-9d4c6c1dcd714f3d/out
+cargo:rerun-if-changed=device.x
+cargo:rerun-if-changed=build.rs

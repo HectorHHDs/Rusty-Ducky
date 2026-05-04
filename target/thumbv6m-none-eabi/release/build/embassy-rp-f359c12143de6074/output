@@ -1,0 +1,4 @@
+cargo:rustc-link-search=/home/hect/Rusty-Ducky/target/thumbv6m-none-eabi/release/build/embassy-rp-f359c12143de6074/out
+cargo:rerun-if-changed=build.rs
+cargo:rerun-if-changed=link-rp.x.in
+cargo::rustc-check-cfg=cfg(has_fpu)
