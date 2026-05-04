@@ -27,14 +27,14 @@ Implements the full DuckyScript 3.0 interpreter from the original CircuitPython
 
 ## How to install an SD card onto your pico:
 
-SD Card Module    Pico GPIO    Pico Physical Pin
-─────────────────────────────────────────────────
-VCC (3.3V)    →  3V3          Pin 36
-GND           →  GND          Pin 38 (or any GND)
-MISO (DO)     →  GP16         Pin 21
-CS  (SS)      →  GP17         Pin 22
-SCK (CLK)     →  GP18         Pin 24
-MOSI (DI)     →  GP19         Pin 25
+| SD Card Module | Pico GPIO   | Pico Physical Pin  |
+|----------------|-------------|--------------------|
+| VCC (3.3V)  -> |3V3          |Pin 36              |
+| GND         -> |GND          |Pin 38 (or any GND) |
+| MISO (DO)   -> |GP16         |Pin 21              |
+| CS  (SS)    -> |GP17         |Pin 22              |
+| SCK (CLK)   -> |GP18         |Pin 24              |
+| MOSI (DI)   -> |GP19         |Pin 25              |
 **SD card is fully optional.**
 
 A few notes:
