@@ -35,6 +35,7 @@ Implements the full DuckyScript 3.0 interpreter from the original CircuitPython
 | CS  (SS)    -> |GP17         |Pin 22              |
 | SCK (CLK)   -> |GP18         |Pin 24              |
 | MOSI (DI)   -> |GP19         |Pin 25              |
+
 **SD card is fully optional.**
 
 A few notes:
