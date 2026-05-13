@@ -21,7 +21,7 @@ pub fn select_payload(p1: &Input, p2: &Input, p3: &Input, p4: &Input) -> &'stati
     if p1.is_low()      { "payload.dd"  }
     else if p2.is_low() { "payload2.dd" }
     else if p3.is_low() { "payload3.dd" }
-    else if p4.is_low() { "payload4.dd" }
+    else if p4.is_low() { "payload3.dd" }  // p4 now maps to payload3.dd (payload4 removed)
     else                { "payload.dd"  }
 }
 

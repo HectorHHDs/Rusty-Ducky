@@ -6,7 +6,7 @@
 use heapless::{String, Vec};
 use embassy_sync::blocking_mutex::{raw::CriticalSectionRawMutex, Mutex};
 
-const MAX_MSGS: usize = 16;
+const MAX_MSGS: usize = 32;
 const MAX_MSG_LEN: usize = 80;
 
 struct LogBuf {

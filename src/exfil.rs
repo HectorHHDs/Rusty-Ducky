@@ -1,175 +1,154 @@
-//! exfil.rs — LED-based data exfiltration monitor (Step 9)
+//! exfil.rs — Data exfiltration via CDC serial (ttyACM1)
 //!
-//! Mirrors monitor_led_changes() from duckyinpython.py exactly.
-//!
-//! How it works:
-//!   The target host's keyboard LED state (CapsLock, NumLock) is used as a
-//!   covert 1-bit-per-toggle channel. The Pico watches LED state changes
-//!   reported by the host via HID SET_REPORT and decodes them into bytes:
-//!
-//!     CapsLock toggle → bit 0
-//!     NumLock  toggle → bit 1
-//!     8 bits collected → write one byte to loot.bin
-//!     ScrollLock toggle → stop exfil (sentinel)
-//!
-//!   A payload script enables exfil mode by setting $_EXFIL_MODE_ENABLED = TRUE.
-//!   The LED stays solid on during exfil ($_EXFIL_LEDS_ENABLED).
-//!
-//! Loot storage:
-//!   Written to loot.bin on flash (always) and SD card (if present).
-//!   The file is opened in append mode so multiple exfil runs accumulate.
-//!
-//! Reading loot:
-//!   Use the serial management interface:  get loot.bin  (hex-dumps binary)
-//!   Or retrieve the SD card and read loot.bin directly on your computer.
+//! exfil_send.py sends: EXFIL:<hexdata>\n
+//! The CDC task receives it via KEY_CHANNEL.
+//! exfil_task decodes and appends to loot.bin.
 
 use defmt::*;
 use embassy_time::{Duration, Timer};
-use embassy_sync::{
-    blocking_mutex::raw::CriticalSectionRawMutex,
-    signal::Signal,
-};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
 
-use crate::usb::hid::LED_STATE;
-use crate::hardware::EXFIL_LEDS_ENABLED;
-use crate::ducky;
-
-// ---------------------------------------------------------------------------
-// Exfil control signals
-// ---------------------------------------------------------------------------
-
-/// Set TRUE by DuckyScript when $_EXFIL_MODE_ENABLED = TRUE.
-/// Exfil task watches this to start/stop collection.
 pub static EXFIL_MODE_ENABLED: Signal<CriticalSectionRawMutex, bool> = Signal::new();
 
-// ---------------------------------------------------------------------------
-// Exfil task
-// ---------------------------------------------------------------------------
-//
-// Runs as a spawned embassy task alongside the LED, button, and USB tasks.
-// Polls the HID LED state at 1ms intervals when active — matches the
-// asyncio.sleep(0.001) polling rate from duckyinpython.py.
+// Streaming write state for loot.bin
+static mut LOOT_SLOT: usize = 3;
+static mut LOOT_PAGE: usize = 0;   // next page to write
+static mut LOOT_TOTAL: usize = 0;  // total bytes written so far
+static mut LOOT_PAGE_BUF: [u8; 256] = [0xFFu8; 256];
+static mut LOOT_PAGE_POS: usize = 0;  // position within current page
+static mut LOOT_STARTED: bool = false;
+
+fn hex_decode(hex: &str, out: &mut heapless::Vec<u8, 512>) {
+    let hex = hex.trim();
+    let bytes = hex.as_bytes();
+    let mut i = 0;
+    while i + 1 < bytes.len() {
+        let hi = nibble(bytes[i]);
+        let lo = nibble(bytes[i+1]);
+        if hi < 16 && lo < 16 {
+            let _ = out.push((hi << 4) | lo);
+        }
+        i += 2;
+    }
+}
+
+fn nibble(b: u8) -> u8 {
+    match b {
+        b'0'..=b'9' => b - b'0',
+        b'a'..=b'f' => b - b'a' + 10,
+        b'A'..=b'F' => b - b'A' + 10,
+        _ => 255,
+    }
+}
 
 #[embassy_executor::task]
 pub async fn exfil_task() {
     info!("exfil_task: started");
-
     loop {
-        // Wait until exfil mode is enabled by a script
-        let enabled = EXFIL_MODE_ENABLED.wait().await;
-        if !enabled { continue; }
+        // Wait for a key from the CDC key_listener channel
+        let key = crate::usb::cdc::KEY_CHANNEL.receive().await;
+        let s = key.as_str();
 
-        info!("[exfil] mode enabled — collecting LED bits");
-        EXFIL_LEDS_ENABLED.signal(true);  // hold LED solid on
+        // Check if it's an exfil packet
+        if s.starts_with("EXFIL:") {
+            let hex = &s[6..];
+            let mut decoded: heapless::Vec<u8, 512> = heapless::Vec::new();
+            hex_decode(hex, &mut decoded);
 
-        let mut bit_list: heapless::Vec<u8, 8> = heapless::Vec::new();
-        let mut loot_bytes: heapless::Vec<u8, 512> = heapless::Vec::new();
-
-        let mut last_caps_state:   bool;
-        let mut last_num_state:    bool;
-        let last_scroll_state: bool;
-
-        // Read initial LED state
-        {
-            let leds = *LED_STATE.lock().await;
-            last_caps_state   = leds & 0x02 != 0;
-            last_num_state    = leds & 0x01 != 0;
-            last_scroll_state = leds & 0x04 != 0;
+            if !decoded.is_empty() {
+                info!("[exfil] received {} bytes", decoded.len());
+                crate::console_log::push("exfil: data received");
+                if !unsafe { LOOT_STARTED } { loot_begin().await; }
+                loot_append(&decoded).await;
+                loot_finish().await;  // finalise after each chunk so data is readable
+            }
+        } else if EXFIL_MODE_ENABLED.signaled() {
+            let enabled = EXFIL_MODE_ENABLED.wait().await;
+            if enabled {
+                let mut buf: heapless::Vec<u8, 512> = heapless::Vec::new();
+                let _ = buf.extend_from_slice(s.as_bytes());
+                let _ = buf.push(b'\n');
+                if !unsafe { LOOT_STARTED } { loot_begin().await; }
+                loot_append(&buf).await;
+                loot_finish().await;
+            }
         }
 
-        'collect: loop {
-            // Check if exfil was cancelled by the script
-            if EXFIL_MODE_ENABLED.signaled() {
-                let still_on = EXFIL_MODE_ENABLED.wait().await;
-                if !still_on {
-                    info!("[exfil] mode disabled by script");
-                    break 'collect;
-                }
-            }
-
-            // Read current LED state
-            let leds = *LED_STATE.lock().await;
-            let caps_state   = leds & 0x02 != 0;
-            let num_state    = leds & 0x01 != 0;
-            let scroll_state = leds & 0x04 != 0;
-
-            // CapsLock toggle → bit 0
-            if caps_state != last_caps_state {
-                let _ = bit_list.push(0);
-                last_caps_state = caps_state;
-                info!("[exfil] CapsLock → bit 0 (total bits: {})", bit_list.len());
-            }
-
-            // NumLock toggle → bit 1
-            if num_state != last_num_state {
-                let _ = bit_list.push(1);
-                last_num_state = num_state;
-                info!("[exfil] NumLock  → bit 1 (total bits: {})", bit_list.len());
-            }
-
-            // 8 bits collected → pack into one byte
-            if bit_list.len() == 8 {
-                let mut byte: u8 = 0;
-                for &b in bit_list.iter() {
-                    byte = (byte << 1) | b;
-                }
-                let _ = loot_bytes.push(byte);
-                bit_list.clear();
-                info!("[exfil] byte 0x{:02X} collected ({} bytes total)", byte, loot_bytes.len());
-
-                // Flush to filesystem every 256 bytes to avoid losing data on power loss
-                if loot_bytes.len() >= 256 {
-                    flush_loot(&loot_bytes).await;
-                    loot_bytes.clear();
-                }
-            }
-
-            // ScrollLock toggle → sentinel, stop collection
-            if scroll_state != last_scroll_state {
-                info!("[exfil] ScrollLock sentinel — exfil complete");
-                // Flush remaining bytes
-                if !loot_bytes.is_empty() || !bit_list.is_empty() {
-                    // Pad incomplete byte with zeros
-                    while bit_list.len() < 8 { let _ = bit_list.push(0); }
-                    if bit_list.len() == 8 {
-                        let mut byte: u8 = 0;
-                        for &b in bit_list.iter() { byte = (byte << 1) | b; }
-                        let _ = loot_bytes.push(byte);
-                    }
-                    flush_loot(&loot_bytes).await;
-                }
-                EXFIL_LEDS_ENABLED.signal(false);  // release LED
-                break 'collect;
-            }
-
-            // Poll at 1ms — same as asyncio.sleep(0.001)
-            Timer::after(Duration::from_millis(1)).await;
+        // Forward non-EXFIL keys back to KEY_CHANNEL for WAIT_FOR_KEY
+        if !s.starts_with("EXFIL:") {
+            crate::usb::cdc::KEY_CHANNEL.try_send(key).ok();
         }
-
-        info!("[exfil] collection stopped");
     }
 }
 
-// ---------------------------------------------------------------------------
-// Loot flush — write collected bytes to loot.bin
-// ---------------------------------------------------------------------------
-//
-// Appends to loot.bin on flash (always) and SD (if present).
-// loot.bin existence on flash also controls the boot.py USB drive visibility
-// logic — we mirror that here via the filesystem layer.
-
-async fn flush_loot(data: &[u8]) {
-    if data.is_empty() { return; }
-    info!("[exfil] flushing {} bytes to loot.bin", data.len());
+async fn loot_begin() {
+    // Erase loot.bin slot once at start of session
     let fs = crate::fs::FlashFs::new();
-    let existing_len = fs.read_file_async("loot.bin").await.unwrap_or(0);
-    let mut combined: heapless::Vec<u8, 4096> = heapless::Vec::new();
-    if existing_len > 0 {
-        let _ = combined.extend_from_slice(unsafe { &crate::fs::FLASH_DATA_BUF[..existing_len] });
+    let slot = crate::fs::slot_index_pub("loot.bin").unwrap_or(3);
+    match fs.stream_begin_async("loot.bin").await {
+        Ok(s) => {
+            unsafe { LOOT_SLOT = s; LOOT_PAGE = 0; LOOT_TOTAL = 0; LOOT_PAGE_POS = 0; LOOT_STARTED = true; }
+            info!("[exfil] loot.bin slot {} erased, streaming started", slot);
+            crate::console_log::push("exfil: loot.bin ready");
+        }
+        Err(e) => { warn!("[exfil] loot_begin failed: {}", e); }
     }
-    let _ = combined.extend_from_slice(data);
-    match fs.write_file_async("loot.bin", &combined).await {
-        Ok(())  => info!("[exfil] loot.bin updated ({} bytes total)", combined.len()),
-        Err(e)  => warn!("[exfil] loot.bin write failed: {}", e),
+}
+
+async fn loot_append(data: &[u8]) {
+    if data.is_empty() { return; }
+    let fs = crate::fs::FlashFs::new();
+
+    let mut pos = 0;
+    while pos < data.len() {
+        let page_pos  = unsafe { LOOT_PAGE_POS };
+        let space     = 256 - page_pos;
+        let take      = (data.len() - pos).min(space);
+
+        unsafe {
+            LOOT_PAGE_BUF[page_pos..page_pos+take].copy_from_slice(&data[pos..pos+take]);
+            LOOT_PAGE_POS += take;
+            LOOT_TOTAL    += take;
+        }
+        pos += take;
+
+        // Flush full page
+        if unsafe { LOOT_PAGE_POS } == 256 {
+            unsafe { crate::fs::PAGE_BUF.copy_from_slice(&LOOT_PAGE_BUF); }
+            let page_idx = unsafe { LOOT_PAGE };
+            let slot     = unsafe { LOOT_SLOT };
+            if let Err(e) = fs.stream_chunk_async(slot, page_idx).await {
+                warn!("[exfil] page write failed: {}", e);
+                return;
+            }
+            unsafe {
+                LOOT_PAGE_BUF.fill(0xFF);
+                LOOT_PAGE_POS = 0;
+                LOOT_PAGE += 1;
+            }
+            info!("[exfil] page {} written", page_idx);
+        }
+    }
+}
+
+async fn loot_finish() {
+    let fs = crate::fs::FlashFs::new();
+    // Flush remaining partial page
+    let page_pos = unsafe { LOOT_PAGE_POS };
+    if page_pos > 0 {
+        unsafe { crate::fs::PAGE_BUF.copy_from_slice(&LOOT_PAGE_BUF); }
+        let page_idx = unsafe { LOOT_PAGE };
+        let slot     = unsafe { LOOT_SLOT };
+        let _ = fs.stream_chunk_async(slot, page_idx).await;
+    }
+    let total = unsafe { LOOT_TOTAL };
+    let slot  = unsafe { LOOT_SLOT };
+    match fs.stream_finish_async(slot, total).await {
+        Ok(()) => {
+            info!("[exfil] loot.bin finalised ({} bytes)", total);
+            crate::console_log::push("exfil: loot.bin saved");
+            unsafe { LOOT_STARTED = false; }
+        }
+        Err(e) => { warn!("[exfil] finalise failed: {}", e); }
     }
 }

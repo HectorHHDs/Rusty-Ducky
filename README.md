@@ -17,26 +17,25 @@ Implements the full DuckyScript 3.0 interpreter from the original CircuitPython
 
 ## Hardware
 
-| Pin  | Function          | Notes                                                                 |
-|------|-------------------|-----------------------------------------------------------------------|
-| GP22 | Button 1          | Triggers payload re-run                                               |
-| GP4  | Payload 1 select  | Short to GND = payload.dd                                             |
-| GP5  | Payload 2 select  | Short to GND = payload2.dd                                            |
-| GP10 | Payload 3 select  | Short to GND = payload3.dd                                            |
-| GP11 | Payload 4 select  | Short to GND = payload4.dd                                            |
-| GP0  | Programming mode  | Short to GND = don't run payload, defaults to ATTACKMODE TERMINAL     |
-
+| Pin  | Function         | Notes                                                                     |
+| ---- | ---------------- | ------------------------------------------------------------------------- |
+| GP22 | Button 1         | Triggers payload re-run                                                   |
+| GP4  | Payload 1 select | Short to GND = payload.dd                                                 |
+| GP5  | Payload 2 select | Short to GND = payload2.dd                                                |
+| GP10 | Payload 3 select | Short to GND = payload3.dd                                                |
+| GP11 | Payload 4 select | Short to GND = payload4.dd  #DEPRECATED, THIS WAS SACRIFICED FOR LOOT.BIN |
+| GP0  | Programming mode | Short to GND = don't run payload, defaults to ATTACKMODE TERMINAL         |
 
 ## How to install an SD card onto your pico:
 
-| SD Card Module | Pico GPIO   | Pico Physical Pin  |
-|----------------|-------------|--------------------|
-| VCC (3.3V)  -> |3V3          |Pin 36              |
-| GND         -> |GND          |Pin 38 (or any GND) |
-| MISO (DO)   -> |GP16         |Pin 21              |
-| CS  (SS)    -> |GP17         |Pin 22              |
-| SCK (CLK)   -> |GP18         |Pin 24              |
-| MOSI (DI)   -> |GP19         |Pin 25              |
+| SD Card Module | Pico GPIO | Pico Physical Pin   |
+| -------------- | --------- | ------------------- |
+| VCC (3.3V)  -> | 3V3       | Pin 36              |
+| GND         -> | GND       | Pin 38 (or any GND) |
+| MISO (DO)   -> | GP16      | Pin 21              |
+| CS  (SS)    -> | GP17      | Pin 22              |
+| SCK (CLK)   -> | GP18      | Pin 24              |
+| MOSI (DI)   -> | GP19      | Pin 25              |
 
 **SD card is fully optional.**
 
@@ -148,6 +147,7 @@ Type help for commands.
 ```
 
 **Upload a payload:**
+
 ```
 > put payload.dd
 Send content. Type END on its own line to finish.
@@ -162,6 +162,7 @@ Wrote 52 bytes to payload.dd
 ```
 
 **List files:**
+
 ```
 > list
   payload.dd
@@ -170,6 +171,7 @@ Wrote 52 bytes to payload.dd
 ```
 
 **Run a payload immediately (non-blocking):**
+
 ```
 > run payload.dd
 Queued: payload.dd
@@ -177,6 +179,7 @@ Queued: payload.dd
 ```
 
 **Read a file back:**
+
 ```
 > get payload.dd
 DELAY 500
@@ -186,6 +189,7 @@ GUI r
 ```
 
 **Hex dump loot.bin:**
+
 ```
 > exfil
 loot.bin: 8 bytes
@@ -194,6 +198,7 @@ loot.bin: 8 bytes
 ```
 
 **Soft reset:**
+
 ```
 > reboot
 Rebooting...
@@ -258,6 +263,7 @@ ENTER
 ```
 
 Start key_listener.py on the host:
+
 ```bash
 python key_listener.py            # auto-detects Pico serial port
 python key_listener.py COM5       # specify port manually (Windows)
@@ -289,12 +295,12 @@ Stubbed (fall back to US): ES, IT, PT, UK
 
 ## Feature flags at boot
 
-| Condition                     | USB descriptor     | SD accessible |
-|-------------------------------|--------------------|---------------|
-| No SD card soldered           | HID only           | —             |
-| SD present, GP15 floating     | HID + MSC          | Yes (USB drive) |
-| SD present, GP15 to GND       | HID only           | Yes (script only) |
-| GP0 to GND                    | HID only (no payload) | Yes        |
+| Condition                 | USB descriptor        | SD accessible     |
+| ------------------------- | --------------------- | ----------------- |
+| No SD card soldered       | HID only              | —                 |
+| SD present, GP15 floating | HID + MSC             | Yes (USB drive)   |
+| SD present, GP15 to GND   | HID only              | Yes (script only) |
+| GP0 to GND                | HID only (no payload) | Yes               |
 
 ---
 
@@ -315,16 +321,16 @@ drive is backed by the SD card, not the internal flash.
 
 ## Comparison with CircuitPython version
 
-| Feature                  | CircuitPython         | ducky-rs (Rust)        |
-|--------------------------|-----------------------|------------------------|
-| DuckyScript 3.0          | ✅ Full               | ✅ Full                |
-| HOLD / RELEASE           | ✅                    | ✅                     |
-| DEFINE macros            | ✅                    | ✅                     |
-| Runtime layout switch    | ✅ (dynamic import)   | ✅ (compiled-in tables)|
-| WAIT_FOR_BUTTON timeout  | ❌                    | ✅ New                 |
-| $_BUTTON_ELAPSED_MS      | ❌                    | ✅ New                 |
-| USB HID + MSC combined   | ❌                    | ✅ (SD required)       |
-| Payload manager          | WiFi webapp (Pico W)  | Serial terminal (any)  |
-| Flash filesystem         | CircuitPython VFS     | LittleFS               |
-| Startup time             | ~3s (Python boot)     | <100ms                 |
-| Binary size              | ~600KB runtime        | ~150KB total           |
+| Feature                 | CircuitPython        | ducky-rs (Rust)        |
+| ----------------------- | -------------------- | ---------------------- |
+| DuckyScript 3.0         | ✅ Full               | ✅ Full                 |
+| HOLD / RELEASE          | ✅                    | ✅                      |
+| DEFINE macros           | ✅                    | ✅                      |
+| Runtime layout switch   | ✅ (dynamic import)   | ✅ (compiled-in tables) |
+| WAIT_FOR_BUTTON timeout | ❌                    | ✅ New                  |
+| $_BUTTON_ELAPSED_MS     | ❌                    | ✅ New                  |
+| USB HID + MSC combined  | ❌                    | ✅ (SD required)        |
+| Payload manager         | WiFi webapp (Pico W) | Serial terminal (any)  |
+| Flash filesystem        | CircuitPython VFS    | LittleFS               |
+| Startup time            | ~3s (Python boot)    | <100ms                 |
+| Binary size             | ~600KB runtime       | ~150KB total           |

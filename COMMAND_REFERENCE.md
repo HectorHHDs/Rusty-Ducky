@@ -12,7 +12,14 @@ Indentation is supported everywhere. Lines starting with `REM` are comments.
 REM This is a comment
 REM TODO: add delay here
 ```
+## TYPE_LOOT
+**Types out loot.bin as a string. Affected by string delay as well.**
 
+```
+DELAY 5000
+STRING_DELAY 50
+TYPE_LOOT
+```
 ---
 
 ## DELAY
@@ -623,7 +630,7 @@ END_WHILE
 | `$_INITIAL_CAPSLOCK` | `SAVE_HOST_KEYBOARD_STATE` | CapsLock state at save time |
 | `$_INITIAL_NUMLOCK` | `SAVE_HOST_KEYBOARD_STATE` | NumLock state at save time |
 | `$_INITIAL_SCROLLLOCK` | `SAVE_HOST_KEYBOARD_STATE` | ScrollLock state at save time |
-| `$_EXFIL_MODE_ENABLED` | Script | Enables LED exfil mode |
+| `$_EXFIL_MODE_ENABLED` | Script | Enables LED exfil mode if set to TRUE, disabled if set to FALSE. Make sure to add a long delay once enabled, to keep the payload running and the pico listening. |
 | `$_EXFIL_LEDS_ENABLED` | Script | Holds LED on during exfil |
 
 ---
