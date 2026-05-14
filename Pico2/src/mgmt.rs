@@ -79,6 +79,66 @@ async fn handle_cmd(console: &mut CdcAcmClass<'static, Driver<'static, USB>>, li
     let cmd_lc = core::str::from_utf8(&lc[..cb.len().min(8)]).unwrap_or("");
 
     match cmd_lc {
+        "exfil" => {
+            if arg == "clear" {
+                let fs = crate::fs::FlashFs::new();
+                match fs.delete_file_async("loot.bin").await {
+                    Ok(())  => send(console, b"loot.bin deleted\r\n").await,
+                    Err(_)  => send(console, b"loot.bin not found\r\n").await,
+                }
+            } else {
+                let fs = crate::fs::FlashFs::new();
+                match fs.read_file_async("loot.bin").await {
+                    Err(_) => {
+                        send(console, b"loot.bin empty or not found\r\n").await;
+                        send(console, b"Exfil requires $_EXFIL_MODE_ENABLED = TRUE in payload\r\n").await;
+                        send(console, b"and exfil_send.py running on target machine\r\n").await;
+                    }
+                    Ok(len) => {
+                        let data = unsafe { &crate::fs::FLASH_DATA_BUF[..len] };
+                        // Show as text if printable, otherwise hex
+                        let is_text = data.iter().all(|&b| b >= 0x20 && b <= 0x7E || b == b'\n' || b == b'\r');
+                        let mut size_str: heapless::String<32> = heapless::String::new();
+                        let _ = size_str.push_str("loot.bin: ");
+                        crate::mgmt_util::push_num(&mut size_str, len);
+                        let _ = size_str.push_str(" bytes\r\n");
+                        send(console, size_str.as_bytes()).await;
+                        if is_text {
+                            for line in core::str::from_utf8(data).unwrap_or("").lines() {
+                                send(console, line.as_bytes()).await;
+                                send(console, b"\r\n").await;
+                            }
+                        } else {
+                            // Hex dump
+                            for (i, chunk) in data.chunks(16).enumerate() {
+                                let mut line: heapless::String<80> = heapless::String::new();
+                                crate::mgmt_util::fmt_hex32(&mut line, (i * 16) as u32);
+                                let _ = line.push_str(": ");
+                                for &b in chunk {
+                                    crate::mgmt_util::fmt_hex8(&mut line, b);
+                                    let _ = line.push(' ');
+                                }
+                                let _ = line.push_str("\r\n");
+                                send(console, line.as_bytes()).await;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        "keys" => {
+            // Drain and show all buffered keys from key_listener.py
+            let mut count = 0u8;
+            while let Ok(key) = crate::usb::cdc::KEY_CHANNEL.try_receive() {
+                send(console, b"  key: ").await;
+                send(console, key.as_bytes()).await;
+                send(console, b"\r\n").await;
+                count += 1;
+            }
+            if count == 0 {
+                send(console, b"No keys buffered (is key_listener.py running on ttyACM1?)\r\n").await;
+            }
+        }
         "modes" => {
             send(console, b"Supported ATTACKMODE values:\r\n").await;
             send(console, b"  ATTACKMODE HID              keyboard + mouse\r\n").await;
@@ -120,7 +180,10 @@ async fn handle_cmd(console: &mut CdcAcmClass<'static, Driver<'static, USB>>, li
             send(console, b"  format                 erase all payloads\r\n").await;
             send(console, b"  reboot                 reboot device\r\n").await;
             send(console, b"  modes                  show supported ATTACKMODE values\r\n").await;
-            send(console, b"Valid names: payload.dd payload2.dd payload3.dd payload4.dd\r\n").await;
+            send(console, b"  keys                   show buffered keys from key_listener\r\n").await;
+            send(console, b"  exfil                  show loot.bin contents and byte count\r\n").await;
+            send(console, b"  exfil clear            delete loot.bin\r\n").await;
+            send(console, b"Valid names: payload.dd payload2.dd payload3.dd\r\n").await;
         }
 
         "list" => {
@@ -181,7 +244,6 @@ async fn handle_cmd(console: &mut CdcAcmClass<'static, Driver<'static, USB>>, li
             let name: &'static str = match arg {
                 "payload2.dd" => "payload2.dd",
                 "payload3.dd" => "payload3.dd",
-                "payload4.dd" => "payload4.dd",
                 "payload.dd"  => "payload.dd",
                 _ => {
                     send(console, b"Usage: run <payload.dd|payload2.dd|payload3.dd|payload4.dd>\r\n").await;
@@ -217,66 +279,119 @@ async fn handle_cmd(console: &mut CdcAcmClass<'static, Driver<'static, USB>>, li
             let name: &'static str = match arg {
                 "payload2.dd" => "payload2.dd",
                 "payload3.dd" => "payload3.dd",
-                "payload4.dd" => "payload4.dd",
                 "payload.dd"  => "payload.dd",
                 _ => {
                     send(console, b"Usage: put <payload.dd|payload2.dd|payload3.dd|payload4.dd>\r\n").await;
                     return;
                 }
             };
+
+            // Erase slot immediately
+            send(console, b"Erasing slot...\r\n").await;
+            let fs = crate::fs::FlashFs::new();
+            let slot = match fs.stream_begin_async(name).await {
+                Ok(s)  => s,
+                Err(e) => { send(console, b"Error: ").await; send(console, e.as_bytes()).await; send(console, b"\r\n").await; return; }
+            };
             send(console, b"Send content, type END on its own line to finish:\r\n").await;
 
-            let mut content     = [0u8; 4096];
-            let mut content_len = 0usize;
-            let mut rx2         = [0u8; 64];
-            let mut line2       = [0u8; 64];
-            let mut len2        = 0usize;
+            // Stream line by line into flash pages
+            // PAGE accumulates bytes; when full (256 bytes) it flushes to flash
+            static mut LINE_BUF: [u8; 1024] = [0u8; 1024];
+            static mut LINE_LEN: usize      = 0;
+            unsafe { LINE_LEN = 0; }
+
+            let mut page_buf  = [0xFFu8; 256];
+            let mut page_pos  = 0usize;   // position within current page
+            let mut page_idx  = 0usize;   // which page we're on
+            let mut total     = 0usize;   // total bytes written
+            let mut rx2       = [0u8; 64];
+            let mut done      = false;
 
             'upload: loop {
                 let n2 = match console.read_packet(&mut rx2).await {
                     Ok(n) => n, Err(_) => break 'upload,
                 };
+
                 for i in 0..n2 {
                     match rx2[i] {
                         b'\r' | b'\n' => {
                             send(console, b"\r\n").await;
-                            if len2 > 0 {
-                                if let Ok(s) = core::str::from_utf8(&line2[..len2]) {
-                                    if s.trim().eq_ignore_ascii_case("end") { break 'upload; }
-                                    let bytes = s.as_bytes();
-                                    let space = content.len() - content_len;
-                                    let take  = bytes.len().min(space);
-                                    content[content_len..content_len+take].copy_from_slice(&bytes[..take]);
-                                    content_len += take;
-                                    if content_len < content.len() {
-                                        content[content_len] = b'\n';
-                                        content_len += 1;
+                            let ll = unsafe { LINE_LEN };
+                            if ll > 0 {
+                                let line = unsafe { core::str::from_utf8(&LINE_BUF[..ll]).unwrap_or("") };
+                                if line.trim().eq_ignore_ascii_case("end") {
+                                    done = true;
+                                    break 'upload;
+                                }
+                                // Append line + newline to page buffer
+                                let bytes = unsafe { &LINE_BUF[..ll] };
+                                for &b in bytes.iter().chain(b"\n".iter()) {
+                                    page_buf[page_pos] = b;
+                                    page_pos += 1;
+                                    total += 1;
+                                    // Flush page when full
+                                    if page_pos == 256 {
+                                        unsafe { crate::fs::PAGE_BUF.copy_from_slice(&page_buf); }
+                                        if let Err(e) = fs.stream_chunk_async(slot, page_idx).await {
+                                            send(console, b"Write error: ").await;
+                                            send(console, e.as_bytes()).await;
+                                            send(console, b"\r\n").await;
+                                            return;
+                                        }
+                                        page_buf.fill(0xFF);
+                                        page_pos = 0;
+                                        page_idx += 1;
                                     }
                                 }
-                                len2 = 0;
+                                unsafe { LINE_LEN = 0; }
                             }
                         }
                         0x08 | 0x7F => {
-                            if len2 > 0 { len2 -= 1; send(console, b"\x08 \x08").await; }
+                            if unsafe { LINE_LEN } > 0 {
+                                unsafe { LINE_LEN -= 1; }
+                                send(console, b"\x08 \x08").await;
+                            }
                         }
                         0x1B => {}
                         b if b >= 0x20 && b < 0x7F => {
-                            if len2 < 63 { line2[len2] = b; len2 += 1; send(console, &[b]).await; }
+                            let ll = unsafe { LINE_LEN };
+                            if ll < 1023 {
+                                unsafe { LINE_BUF[ll] = b; LINE_LEN += 1; }
+                                send(console, &[b]).await;
+                            }
                         }
                         _ => {}
                     }
                 }
             }
 
-            send(console, b"Writing to flash...\r\n").await;
-            let fs = crate::fs::FlashFs::new();
-            match fs.write_file_async(name, &content[..content_len]).await {
-                Ok(())  => send(console, b"Saved\r\n").await,
-                Err(e)  => { send(console, b"Error: ").await; send(console, e.as_bytes()).await; send(console, b"\r\n").await; }
+            if done {
+                // Flush remaining partial page
+                if page_pos > 0 {
+                    unsafe { crate::fs::PAGE_BUF.copy_from_slice(&page_buf); }
+                    if let Err(e) = fs.stream_chunk_async(slot, page_idx).await {
+                        send(console, b"Write error: ").await;
+                        send(console, e.as_bytes()).await;
+                        send(console, b"\r\n").await;
+                        return;
+                    }
+                }
+                // Write header with total length
+                send(console, b"Finalising...\r\n").await;
+                match fs.stream_finish_async(slot, total).await {
+                    Ok(())  => {
+                        send(console, b"Saved (").await;
+                        let mut ns: heapless::String<32> = heapless::String::new();
+                        crate::mgmt_util::push_num(&mut ns, total);
+                        send(console, ns.as_bytes()).await;
+                        send(console, b" bytes)\r\n").await;
+                    }
+                    Err(e) => { send(console, b"Error: ").await; send(console, e.as_bytes()).await; send(console, b"\r\n").await; }
+                }
             }
         }
-
-        "del" => {
+                "del" => {
             if arg.is_empty() {
                 send(console, b"Usage: del <payload.dd>\r\n").await;
             } else {

@@ -8,6 +8,7 @@ use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
     channel::Channel,
     mutex::Mutex,
+    signal::Signal,
 };
 use heapless::Vec;
 
@@ -136,7 +137,8 @@ pub async fn send(cmd: HidCommand) {
 // LED state
 // ---------------------------------------------------------------------------
 
-pub static LED_STATE: Mutex<CriticalSectionRawMutex, u8> = Mutex::new(0);
+pub static LED_STATE:   Mutex<CriticalSectionRawMutex, u8>          = Mutex::new(0);
+pub static LED_CHANGED: embassy_sync::channel::Channel<CriticalSectionRawMutex, u8, 64> = embassy_sync::channel::Channel::new();
 
 pub async fn get_led_state() -> u8 {
     *LED_STATE.lock().await
@@ -166,7 +168,12 @@ pub async fn hid_task_inner(
             match kbd_reader.read(&mut buf).await {
                 Ok(_) => {
                     let leds = buf[0] & 0x07;
-                    *LED_STATE.lock().await = leds;
+                    let old = *LED_STATE.lock().await;
+                    if leds != old {
+                        *LED_STATE.lock().await = leds;
+                        info!("[hid] LED state: 0x{:02X}", leds);
+                        LED_CHANGED.try_send(leds).ok();
+                    }
                 }
                 Err(_) => { Timer::after(Duration::from_millis(10)).await; }
             }

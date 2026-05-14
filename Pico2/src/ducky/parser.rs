@@ -34,7 +34,37 @@ pub async fn parse_line(line: &str, ctx: &mut ScriptContext) {
 
     // ---- REM / ATTACKMODE ---------------------------------------------------
     if u.starts_with("REM") { return; }
-    if u.starts_with("ATTACKMODE") { return; } // handled before USB starts
+    if u.starts_with("ATTACKMODE") { return; }
+
+    // ---- TYPE_LOOT — read entire loot.bin and type it out --------------------
+    // One flash read per 64KB chunk, type directly from FLASH_DATA_BUF
+    if u == "TYPE_LOOT" {
+        static mut TYPE_CHUNK: [u8; 256] = [0u8; 256];
+        let fs = crate::fs::FlashFs::new();
+        let mut file_offset = 0usize;
+        loop {
+            // Read next 64KB chunk from flash
+            match fs.read_file_offset_async("loot.bin", file_offset, crate::fs::DATA_BUF_SIZE).await {
+                Err(_) | Ok(0) => break,
+                Ok(n) => {
+                    // Type this chunk 256 bytes at a time from FLASH_DATA_BUF
+                    // No more flash ops until this chunk is fully typed
+                    let mut pos = 0usize;
+                    while pos < n {
+                        let take = (n - pos).min(256);
+                        unsafe { TYPE_CHUNK[..take].copy_from_slice(&crate::fs::FLASH_DATA_BUF[pos..pos+take]); }
+                        if let Ok(text) = core::str::from_utf8(unsafe { &TYPE_CHUNK[..take] }) {
+                            send_string(text, ctx).await;
+                        }
+                        pos += take;
+                    }
+                    file_offset += n;
+                    if n < crate::fs::DATA_BUF_SIZE { break; } // last chunk
+                }
+            }
+        }
+        return;
+    } // handled before USB starts
 
     // ---- DELAY --------------------------------------------------------------
     if u.starts_with("DELAY ") {
@@ -55,8 +85,22 @@ pub async fn parse_line(line: &str, ctx: &mut ScriptContext) {
 
     // ---- STRINGLN -----------------------------------------------------------
     if u.starts_with("STRINGLN ") {
-        let text = expand_vars(&stripped[9..], ctx);
-        send_string(text.as_str(), ctx).await;
+        let raw = stripped[9..].trim();
+        if raw == "$loot.bin" {
+            let fs = crate::fs::FlashFs::new();
+            if let Ok(len) = fs.read_file_async("loot.bin").await {
+                let n = len.min(65536);
+                static mut LOOT_TYPE_BUF2: [u8; 4096] = [0u8; 4096];
+                let n2 = n.min(4096);
+                unsafe { LOOT_TYPE_BUF2[..n2].copy_from_slice(&crate::fs::FLASH_DATA_BUF[..n2]); }
+                if let Ok(text) = core::str::from_utf8(unsafe { &LOOT_TYPE_BUF2[..n2] }) {
+                    send_string(text, ctx).await;
+                }
+            }
+        } else {
+            let text = expand_vars(raw, ctx);
+            send_string(text.as_str(), ctx).await;
+        }
         hid::send(HidCommand::KeyPress(Keycode::ENTER)).await;
         hid::send(HidCommand::KeyRelease(Keycode::ENTER)).await;
         return;
@@ -71,7 +115,23 @@ pub async fn parse_line(line: &str, ctx: &mut ScriptContext) {
 
     // ---- STRING -------------------------------------------------------------
     if u.starts_with("STRING ") {
-        let text = expand_vars(&stripped[7..], ctx);
+        let raw = stripped[7..].trim();
+        // Special: STRING $loot.bin — read full loot.bin and type it
+        if raw == "$loot.bin" {
+            let fs = crate::fs::FlashFs::new();
+            if let Ok(len) = fs.read_file_async("loot.bin").await {
+                // Copy into SCRIPT_BUF (safe — not in use during STRING execution)
+                let n = len.min(65536);
+                static mut LOOT_TYPE_BUF: [u8; 4096] = [0u8; 4096];
+                let n2 = n.min(4096);
+                unsafe { LOOT_TYPE_BUF[..n2].copy_from_slice(&crate::fs::FLASH_DATA_BUF[..n2]); }
+                if let Ok(text) = core::str::from_utf8(unsafe { &LOOT_TYPE_BUF[..n2] }) {
+                    send_string(text, ctx).await;
+                }
+            }
+            return;
+        }
+        let text = expand_vars(raw, ctx);
         send_string(text.as_str(), ctx).await;
         return;
     }

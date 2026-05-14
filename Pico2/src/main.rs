@@ -1,10 +1,6 @@
 #![no_std]
 #![no_main]
 
-use embassy_rp::block::ImageDef;
-#[link_section = ".start_block"]
-#[used]
-static IMAGE_DEF: ImageDef = ImageDef::secure_exe();
 use defmt::*;
 use defmt_rtt as _;
 use panic_probe as _;
@@ -35,6 +31,7 @@ mod usb;
 mod ducky;
 mod layout;
 mod mgmt;
+mod mgmt_util;
 mod exfil;
 
 use usb::hid::{KEYBOARD_REPORT_DESC, MOUSE_REPORT_DESC};
@@ -145,7 +142,7 @@ async fn main(spawner: Spawner) {
         (true,_,_,_) => "payload.dd",
         (_,true,_,_) => "payload2.dd",
         (_,_,true,_) => "payload3.dd",
-        (_,_,_,true) => "payload4.dd",
+        (_,_,_,true) => "payload3.dd",  // p4 maps to payload3.dd
         _            => "payload.dd",
     };
     spawner.spawn(hardware::button_task(

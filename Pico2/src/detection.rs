@@ -2,7 +2,7 @@
 
 use defmt::*;
 use embedded_sdmmc::sdcard::DummyCsPin as SdDummyCs;
-use embedded_sdmmc::{SdCard, Block, BlockDevice};
+use embedded_sdmmc::SdCard;
 use embedded_hal::spi::SpiDevice;
 use embassy_time::Delay;
 

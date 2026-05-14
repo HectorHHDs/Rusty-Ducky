@@ -10,7 +10,6 @@ use defmt::*;
 use heapless::Vec;
 
 use executor::ScriptContext;
-use crate::fs::FlashFs;
 // ---------------------------------------------------------------------------
 // Flash filesystem helpers — all async, go through flash_task channel
 // ---------------------------------------------------------------------------

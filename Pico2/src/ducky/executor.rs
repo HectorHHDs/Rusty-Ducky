@@ -64,6 +64,13 @@ impl ScriptContext {
 
     pub fn get_var(&self, name: &str) -> Option<Value> {
         match name {
+            // $loot.bin — reads loot.bin contents (truncated to 64 chars for expressions)
+            // Use STRING $loot.bin to type the full contents
+            "$loot.bin" => {
+                static mut LOOT_VAR_CACHE: heapless::String<64> = heapless::String::new();
+                // Return cached value — refreshed by LOAD_LOOT or STRING $loot.bin
+                return Some(Value::Str(unsafe { LOOT_VAR_CACHE.clone() }));
+            }
             "$_JITTER_ENABLED"   => return Some(Value::Bool(self.jitter_enabled)),
             "$_JITTER_MAX_DELAY" => return Some(Value::Int(self.jitter_max_delay as i32)),
             "$_HOST_OS"          => {

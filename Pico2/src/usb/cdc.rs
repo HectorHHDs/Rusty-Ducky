@@ -23,7 +23,7 @@ use heapless::String;
 // key_listener.py sends newline-terminated key strings.
 // We buffer up to 8 of them so a fast typist doesn't lose keypresses.
 
-pub type KeyString = String<32>;
+pub type KeyString = String<256>;
 pub static KEY_CHANNEL: Channel<CriticalSectionRawMutex, KeyString, 8> = Channel::new();
 
 // ---------------------------------------------------------------------------
@@ -52,6 +52,8 @@ pub async fn cdc_task_inner(
                                 // Complete key string
                                 if !line.is_empty() {
                                     info!("[WAIT_FOR_KEY] received: {}", line.as_str());
+                                    // Log to console so mgmt terminal shows incoming keys
+                                    crate::console_log::push("key received from key_listener");
                                     // Non-blocking send; if channel full, discard oldest
                                     if KEY_CHANNEL.try_send(line.clone()).is_err() {
                                         // Channel full — drain one and retry

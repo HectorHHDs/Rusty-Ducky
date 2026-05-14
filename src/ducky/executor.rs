@@ -9,8 +9,8 @@ use defmt::*;
 use crate::ducky::expr::{eval_expr, eval_condition, Value, randomize};
 use crate::ducky::parser::{parse_line, jittered_delay};
 
-fn upper64(s: &str) -> String<64> {
-    let mut u: String<64> = String::new();
+fn upper64(s: &str) -> String<256> {
+    let mut u: String<256> = String::new();
     for c in s.chars().take(64) { let _ = u.push(c.to_ascii_uppercase()); }
     u
 }
@@ -21,7 +21,7 @@ fn upper64(s: &str) -> String<64> {
 
 pub struct ScriptContext {
     pub vars:                 heapless::FnvIndexMap<String<16>, Value, 8>,
-    pub funcs:                heapless::FnvIndexMap<String<16>, Vec<String<64>, 8>, 4>,
+    pub funcs:                heapless::FnvIndexMap<String<16>, Vec<String<256>, 8>, 4>,
     pub defines:              heapless::FnvIndexMap<String<16>, String<32>, 4>,
     pub held_keys:            Vec<u8, 8>,
     pub default_delay:        u64,
@@ -34,7 +34,7 @@ pub struct ScriptContext {
     pub saved_caps_lock:      bool,
     pub saved_num_lock:       bool,
     pub saved_scroll_lock:    bool,
-    pub previous_line:        String<64>,
+    pub previous_line:        String<256>,
 }
 
 impl ScriptContext {
@@ -67,19 +67,19 @@ impl ScriptContext {
             // $loot.bin — reads loot.bin contents (truncated to 64 chars for expressions)
             // Use STRING $loot.bin to type the full contents
             "$loot.bin" => {
-                static mut LOOT_VAR_CACHE: heapless::String<64> = heapless::String::new();
+                static mut LOOT_VAR_CACHE: heapless::String<256> = heapless::String::new();
                 // Return cached value — refreshed by LOAD_LOOT or STRING $loot.bin
                 return Some(Value::Str(unsafe { LOOT_VAR_CACHE.clone() }));
             }
             "$_JITTER_ENABLED"   => return Some(Value::Bool(self.jitter_enabled)),
             "$_JITTER_MAX_DELAY" => return Some(Value::Int(self.jitter_max_delay as i32)),
             "$_HOST_OS"          => {
-                let mut s: String<64> = String::new();
+                let mut s: String<256> = String::new();
                 let _ = s.push_str(self.host_os.as_str());
                 return Some(Value::Str(s));
             }
             "$_ACTIVE_LAYOUT"    => {
-                let mut s: String<64> = String::new();
+                let mut s: String<256> = String::new();
                 let _ = s.push_str(self.active_layout.as_str());
                 return Some(Value::Str(s));
             }
@@ -104,7 +104,7 @@ impl ScriptContext {
     }
 
     pub fn set_var_str(&mut self, name: &str, val: &str) {
-        let mut s: String<64> = String::new();
+        let mut s: String<256> = String::new();
         let _ = s.push_str(val);
         self.set_var(name, Value::Str(s));
     }
@@ -123,8 +123,8 @@ pub enum ExecResult { Continue, Restart, Stop }
 // Pre-passes
 // ---------------------------------------------------------------------------
 
-pub fn collect_defines<'a>(lines: &[&'a str], ctx: &mut ScriptContext) -> Vec<String<64>, 64> {
-    let mut out: Vec<String<64>, 64> = Vec::new();
+pub fn collect_defines<'a>(lines: &[&'a str], ctx: &mut ScriptContext) -> Vec<String<256>, 64> {
+    let mut out: Vec<String<256>, 64> = Vec::new();
     for &line in lines {
         let stripped = line.trim();
         if upper64(stripped).starts_with("DEFINE ") {
@@ -137,7 +137,7 @@ pub fn collect_defines<'a>(lines: &[&'a str], ctx: &mut ScriptContext) -> Vec<St
                 let _ = ctx.defines.insert(name, val);
             }
         } else {
-            let mut s: String<64> = String::new();
+            let mut s: String<256> = String::new();
             let _ = s.push_str(&line[..line.len().min(64)]);
             let _ = out.push(s);
         }
@@ -145,8 +145,8 @@ pub fn collect_defines<'a>(lines: &[&'a str], ctx: &mut ScriptContext) -> Vec<St
     out
 }
 
-pub fn collect_functions(lines: &[String<64>], ctx: &mut ScriptContext) -> Vec<String<64>, 64> {
-    let mut out: Vec<String<64>, 64> = Vec::new();
+pub fn collect_functions(lines: &[String<256>], ctx: &mut ScriptContext) -> Vec<String<256>, 64> {
+    let mut out: Vec<String<256>, 64> = Vec::new();
     let mut i = 0;
     while i < lines.len() {
         let u = upper64(lines[i].as_str().trim());
@@ -154,12 +154,12 @@ pub fn collect_functions(lines: &[String<64>], ctx: &mut ScriptContext) -> Vec<S
             let fname_str = &u.as_str()[9..u.len()-2];
             let mut fname: String<16> = String::new();
             for c in fname_str.chars().take(16) { let _ = fname.push(c); }
-            let mut body: Vec<String<64>, 8> = Vec::new();
+            let mut body: Vec<String<256>, 8> = Vec::new();
             i += 1;
             while i < lines.len() {
                 let bl = lines[i].as_str().trim();
                 if upper64(bl).as_str() == "END_FUNCTION" { i += 1; break; }
-                let mut s: String<64> = String::new();
+                let mut s: String<256> = String::new();
                 let _ = s.push_str(&bl[..bl.len().min(64)]);
                 let _ = body.push(s);
                 i += 1;
@@ -173,13 +173,13 @@ pub fn collect_functions(lines: &[String<64>], ctx: &mut ScriptContext) -> Vec<S
     out
 }
 
-fn apply_defines(line: &str, ctx: &ScriptContext) -> String<64> {
-    let mut result: String<64> = String::new();
+fn apply_defines(line: &str, ctx: &ScriptContext) -> String<256> {
+    let mut result: String<256> = String::new();
     let _ = result.push_str(&line[..line.len().min(64)]);
     if ctx.defines.is_empty() { return result; }
     for (name, val) in ctx.defines.iter() {
         if let Some(idx) = result.as_str().find(name.as_str()) {
-            let mut new: String<64> = String::new();
+            let mut new: String<256> = String::new();
             let _ = new.push_str(&result.as_str()[..idx]);
             let _ = new.push_str(val.as_str());
             let rest = &result.as_str()[idx + name.len()..];
@@ -266,7 +266,7 @@ impl ScriptContext {
             }
 
             parse_line(stripped, self).await;
-            let mut prev: String<64> = String::new();
+            let mut prev: String<256> = String::new();
             let _ = prev.push_str(stripped);
             self.previous_line = prev;
             i += 1;
@@ -373,10 +373,10 @@ impl ScriptContext {
 // ---------------------------------------------------------------------------
 
 fn extract_block<'a>(lines: &[&'a str], start: usize, open_kw: &str, close_kw: &str)
-    -> (Vec<String<64>, 32>, usize)
+    -> (Vec<String<256>, 32>, usize)
 {
     let mut depth = 1usize;
-    let mut body: Vec<String<64>, 32> = Vec::new();
+    let mut body: Vec<String<256>, 32> = Vec::new();
     let mut i = start;
     let open_u  = upper64(open_kw);
     let close_u = upper64(close_kw);
@@ -387,7 +387,7 @@ fn extract_block<'a>(lines: &[&'a str], start: usize, open_kw: &str, close_kw: &
             depth -= 1;
             if depth == 0 { return (body, i); }
         }
-        let mut s: String<64> = String::new();
+        let mut s: String<256> = String::new();
         let _ = s.push_str(&lines[i][..lines[i].len().min(64)]);
         let _ = body.push(s);
         i += 1;
@@ -395,9 +395,9 @@ fn extract_block<'a>(lines: &[&'a str], start: usize, open_kw: &str, close_kw: &
     (body, i)
 }
 
-fn extract_if_clause<'a>(lines: &[&'a str], start: usize) -> (Vec<String<64>, 32>, usize) {
+fn extract_if_clause<'a>(lines: &[&'a str], start: usize) -> (Vec<String<256>, 32>, usize) {
     let mut depth = 0usize;
-    let mut body: Vec<String<64>, 32> = Vec::new();
+    let mut body: Vec<String<256>, 32> = Vec::new();
     let mut i = start;
     while i < lines.len() {
         let l = upper64(lines[i].trim());
@@ -405,7 +405,7 @@ fn extract_if_clause<'a>(lines: &[&'a str], start: usize) -> (Vec<String<64>, 32
         if u.starts_with("IF ") || u == "IF" { depth += 1; }
         if u == "END_IF" { if depth == 0 { return (body, i); } depth -= 1; }
         if depth == 0 && (u == "ELSE" || u.starts_with("ELSE IF")) { return (body, i); }
-        let mut s: String<64> = String::new();
+        let mut s: String<256> = String::new();
         let _ = s.push_str(&lines[i][..lines[i].len().min(64)]);
         let _ = body.push(s);
         i += 1;
@@ -413,16 +413,16 @@ fn extract_if_clause<'a>(lines: &[&'a str], start: usize) -> (Vec<String<64>, 32
     (body, i)
 }
 
-fn extract_if_clause_no_else<'a>(lines: &[&'a str], start: usize) -> (Vec<String<64>, 32>, usize) {
+fn extract_if_clause_no_else<'a>(lines: &[&'a str], start: usize) -> (Vec<String<256>, 32>, usize) {
     let mut depth = 0usize;
-    let mut body: Vec<String<64>, 32> = Vec::new();
+    let mut body: Vec<String<256>, 32> = Vec::new();
     let mut i = start;
     while i < lines.len() {
         let l = upper64(lines[i].trim());
         let u = l.as_str();
         if u.starts_with("IF ") || u == "IF" { depth += 1; }
         if u == "END_IF" { if depth == 0 { return (body, i); } depth -= 1; }
-        let mut s: String<64> = String::new();
+        let mut s: String<256> = String::new();
         let _ = s.push_str(&lines[i][..lines[i].len().min(64)]);
         let _ = body.push(s);
         i += 1;
