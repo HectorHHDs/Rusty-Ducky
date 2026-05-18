@@ -14,7 +14,7 @@ pub fn char_to_keycode_us(ch: char) -> (u8, bool) {
     match ch {
         ' '  => (Keycode::SPACE,     false),
         '!'  => (Keycode::N1,        true),
-        '"'  => (Keycode::N2,        true),   // shift+2 = "  (US: shift+' = ")
+        '"'  => (0x34,              true),   // shift+apostrophe = "
         '#'  => (Keycode::N3,        true),
         '$'  => (Keycode::N4,        true),
         '%'  => (Keycode::N5,        true),

@@ -36,9 +36,26 @@ pub async fn parse_line(line: &str, ctx: &mut ScriptContext) {
     if u.starts_with("REM") { return; }
     if u.starts_with("ATTACKMODE") { return; }
 
+    // ---- HUMANIZE [ON|OFF] — toggle human-like typing variation ---------------
+    if u.starts_with("HUMANIZE_WPM") {
+        let v: u32 = stripped["HUMANIZE_WPM".len()..].trim().parse().unwrap_or(60);
+        ctx.humanize_wpm = v.max(10).min(300);
+        ctx.humanize = true;  // HUMANIZE_WPM implicitly enables humanize
+        return;
+    }
+    if u.starts_with("HUMANIZE") {
+        let arg = to_upper::<16>(stripped["HUMANIZE".len()..].trim());
+        ctx.humanize = !arg.as_str().starts_with("OFF");
+        return;
+    }
+
     // ---- TYPE_LOOT — read entire loot.bin and type it out --------------------
-    // One flash read per 64KB chunk, type directly from FLASH_DATA_BUF
+    // Disabled if loot is stored on SD card (use exfil command instead)
     if u == "TYPE_LOOT" {
+        if crate::usb::msc_sd::sd_available() && crate::usb::msc_sd::hidden_block_count() > 0 {
+            crate::console_log::push("TYPE_LOOT: loot is on SD card, cannot type it");
+            return;
+        }
         static mut TYPE_CHUNK: [u8; 256] = [0u8; 256];
         let fs = crate::fs::FlashFs::new();
         let mut file_offset = 0usize;

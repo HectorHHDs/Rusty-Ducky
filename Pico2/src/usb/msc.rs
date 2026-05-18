@@ -7,6 +7,10 @@
 
 use defmt::*;
 use embassy_usb::driver::{Driver, EndpointIn, EndpointOut};
+use core::sync::atomic::AtomicBool;
+
+/// Set true when GP11 is grounded — exposes hidden 10% partition only
+pub static HIDDEN_MODE: AtomicBool = AtomicBool::new(false);
 use embassy_time::{Duration, Timer};
 
 // ---------------------------------------------------------------------------
@@ -141,7 +145,12 @@ async fn handle_scsi<'d, D: Driver<'d>>(
         }
 
         SCSI_READ_CAPACITY_10 => {
-            let last_lba = block_count.saturating_sub(1);
+            let count = if HIDDEN_MODE.load(core::sync::atomic::Ordering::Relaxed) {
+                crate::usb::msc_sd::hidden_block_count()
+            } else {
+                crate::usb::msc_sd::visible_block_count()
+            };
+            let last_lba = count.saturating_sub(1);
             let mut resp = [0u8; 8];
             resp[0..4].copy_from_slice(&last_lba.to_be_bytes());
             resp[4..8].copy_from_slice(&BLOCK_SIZE.to_be_bytes());
@@ -153,9 +162,12 @@ async fn handle_scsi<'d, D: Driver<'d>>(
             let lba   = u32::from_be_bytes([cbw.cb[2],cbw.cb[3],cbw.cb[4],cbw.cb[5]]);
             let count = u16::from_be_bytes([cbw.cb[7],cbw.cb[8]]) as u32;
             for block in lba..lba+count {
-                if !crate::usb::msc_sd::read_block(block, data_buf) {
-                    return CSW_FAIL;
-                }
+                let ok = if HIDDEN_MODE.load(core::sync::atomic::Ordering::Relaxed) {
+                    crate::usb::msc_sd::read_block_hidden(block, data_buf)
+                } else {
+                    crate::usb::msc_sd::read_block_visible(block, data_buf)
+                };
+                if !ok { return CSW_FAIL; }
                 for chunk in data_buf.chunks(64) {
                     if ep_in.write(chunk).await.is_err() { return CSW_FAIL; }
                 }
@@ -175,7 +187,12 @@ async fn handle_scsi<'d, D: Driver<'d>>(
                         Err(_) => return CSW_FAIL,
                     }
                 }
-                if !crate::usb::msc_sd::write_block(block, data_buf) { return CSW_FAIL; }
+                let ok = if HIDDEN_MODE.load(core::sync::atomic::Ordering::Relaxed) {
+                    crate::usb::msc_sd::write_block_hidden(block, data_buf)
+                } else {
+                    crate::usb::msc_sd::write_block_visible(block, data_buf)
+                };
+                if !ok { return CSW_FAIL; }
             }
             CSW_PASS
         }

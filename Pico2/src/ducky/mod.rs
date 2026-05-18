@@ -26,28 +26,53 @@ pub fn init_flash_fs() {
 // Run a payload
 // ---------------------------------------------------------------------------
 
-// Static script buffer — avoids 256KB stack allocation when running payloads
-// 64KB is enough for practical DuckyScript payloads
-static mut SCRIPT_BUF: [u8; 65536] = [0u8; 65536];  // 64KB
+// Static script buffer for flash payloads (64KB — fits in RAM)
+static mut SCRIPT_BUF: [u8; 32768] = [0u8; 32768];  // 32KB
 static mut SCRIPT_BUF_LEN: usize = 0;
+
+// SD payloads reuse SCRIPT_BUF — never loaded simultaneously with a running payload
 
 pub async fn run_payload(filename: &str) {
     info!("[ducky] run_payload: {}", filename);
 
-    let fs = crate::fs::FlashFs::new();
-    if !fs.file_exists_async(filename).await {
-        info!("[ducky] {} not found — skipping", filename);
+    // Try SD card visible partition first (if present)
+    let sd_len = if crate::usb::msc_sd::sd_available() {
+        // SD payloads use SD_SCRIPT_BUF — up to 64KB per read
+        // Larger payloads are read and executed in 64KB chunks
+        let n = crate::usb::msc_sd::read_payload_from_sd(
+            filename, unsafe { &mut SCRIPT_BUF }
+        );
+        if n.is_some() { info!("[ducky] loaded {} from SD", filename); }
+        n
+    } else { None };
+
+    let len2 = if let Some(n) = sd_len {
+        // Run from SD_SCRIPT_BUF
+        let script = match core::str::from_utf8(unsafe { &SCRIPT_BUF[..n] }) {
+            Ok(s)  => s,
+            Err(_) => { warn!("[ducky] SD payload not valid UTF-8"); return; }
+        };
+        run_script_text(script).await;
         return;
-    }
-    let len = match fs.read_file_async(filename).await {
-        Ok(n)  => n,
-        Err(e) => { warn!("[ducky] read error: {}", e); return; }
+    } else {
+        // Fall back to internal flash
+        let fs = crate::fs::FlashFs::new();
+        if !fs.file_exists_async(filename).await {
+            info!("[ducky] {} not found on flash or SD — skipping", filename);
+            return;
+        }
+        let len = match fs.read_file_async(filename).await {
+            Ok(n)  => n,
+            Err(e) => { warn!("[ducky] read error: {}", e); return; }
+        };
+        let n = len.min(crate::fs::DATA_BUF_SIZE);
+        unsafe {
+            SCRIPT_BUF[..n].copy_from_slice(&crate::fs::FLASH_DATA_BUF[..n]);
+            SCRIPT_BUF_LEN = n;
+        }
+        n
     };
-    let len2 = len.min(crate::fs::DATA_BUF_SIZE);
-    unsafe {
-        SCRIPT_BUF[..len2].copy_from_slice(&crate::fs::FLASH_DATA_BUF[..len2]);
-        SCRIPT_BUF_LEN = len2;
-    }
+    let _ = len2;
 
     let script = match core::str::from_utf8(unsafe { &SCRIPT_BUF[..SCRIPT_BUF_LEN] }) {
         Ok(s)  => s,

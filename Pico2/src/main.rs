@@ -120,6 +120,9 @@ async fn main(spawner: Spawner) {
                 // msc_sd::init probes and keeps the SPI device for block R/W
                 let block_count = usb::msc_sd::init(dev);
                 if block_count > 0 {
+                    // Auto-partition and auto-format both partitions if needed
+                    // Only runs if SD is present — safe to call every boot
+                    usb::msc_sd::ensure_partitioned_and_formatted();
                     detection::Features {
                         sd_available: true, sd_block_count: block_count,
                         usb_msc: true, usb_hid: true, usb_cdc: true,
@@ -133,20 +136,25 @@ async fn main(spawner: Spawner) {
     };
 
     // Boot mode + payload selector pins
-    let prog_mode = Input::new(p.PIN_0, Pull::Up).is_low();
+    let prog_mode   = Input::new(p.PIN_0,  Pull::Up).is_low();
+    let hidden_mode = Input::new(p.PIN_11, Pull::Up).is_low();
+    if hidden_mode {
+        crate::usb::msc::HIDDEN_MODE.store(true, core::sync::atomic::Ordering::Relaxed);
+        info!("Hidden partition mode active (GP11 grounded)");
+        crate::console_log::push("Hidden storage mode active");
+    }
     let p1 = Input::new(p.PIN_4,  Pull::Up);
     let p2 = Input::new(p.PIN_5,  Pull::Up);
     let p3 = Input::new(p.PIN_10, Pull::Up);
-    let p4 = Input::new(p.PIN_11, Pull::Up);
-    let boot_payload: &'static str = match (p1.is_low(), p2.is_low(), p3.is_low(), p4.is_low()) {
-        (true,_,_,_) => "payload.dd",
-        (_,true,_,_) => "payload2.dd",
-        (_,_,true,_) => "payload3.dd",
-        (_,_,_,true) => "payload3.dd",  // p4 maps to payload3.dd
-        _            => "payload.dd",
+    // GP4=payload.dd, GP5=payload2.dd, GP10=payload3.dd, GP11=hidden storage (not payload)
+    let boot_payload: &'static str = match (p1.is_low(), p2.is_low(), p3.is_low()) {
+        (true,_,_) => "payload.dd",
+        (_,true,_) => "payload2.dd",
+        (_,_,true) => "payload3.dd",
+        _          => "payload.dd",
     };
     spawner.spawn(hardware::button_task(
-        Input::new(p.PIN_22, Pull::Up), p1, p2, p3, p4,
+        Input::new(p.PIN_22, Pull::Up), p1, p2, p3,
     ).expect("btn"));
 
     // Read boot payload and parse ATTACKMODE before USB starts
