@@ -23,7 +23,7 @@ Implements the full DuckyScript 3.0 interpreter from the original CircuitPython
 | GP4  | Payload 1 select | Short to GND = payload.dd                                                 |
 | GP5  | Payload 2 select | Short to GND = payload2.dd                                                |
 | GP10 | Payload 3 select | Short to GND = payload3.dd                                                |
-| GP11 | Payload 4 select | Short to GND = payload4.dd  #DEPRECATED, THIS WAS SACRIFICED FOR LOOT.BIN |
+| GP11 | Payload 4 select | Short to GND = Hidden storage mode only (applicable if you have an SD card connected, shows a hidden partition where you can put payloads and such) |
 | GP0  | Programming mode | Short to GND = don't run payload, defaults to ATTACKMODE TERMINAL         |
 
 ## How to install an SD card onto your pico:

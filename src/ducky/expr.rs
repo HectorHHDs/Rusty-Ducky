@@ -8,7 +8,7 @@ use crate::ducky::executor::ScriptContext;
 pub enum Value {
     Int(i32),
     Bool(bool),
-    Str(String<64>),
+    Str(String<256>),
 }
 
 impl Value {
@@ -26,11 +26,11 @@ impl Value {
             Value::Str(s)  => !s.is_empty() && s.as_str() != "FALSE" && s.as_str() != "0",
         }
     }
-    pub fn as_str(&self) -> String<64> {
+    pub fn as_str(&self) -> String<256> {
         match self {
             Value::Str(s)  => s.clone(),
-            Value::Int(n)  => { let mut s: String<64> = String::new(); let _ = core::fmt::write(&mut s, format_args!("{}", n)); s }
-            Value::Bool(b) => { let mut s: String<64> = String::new(); let _ = s.push_str(if *b { "TRUE" } else { "FALSE" }); s }
+            Value::Int(n)  => { let mut s: String<256> = String::new(); let _ = core::fmt::write(&mut s, format_args!("{}", n)); s }
+            Value::Bool(b) => { let mut s: String<256> = String::new(); let _ = s.push_str(if *b { "TRUE" } else { "FALSE" }); s }
         }
     }
 }

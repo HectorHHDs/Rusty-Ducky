@@ -13,7 +13,9 @@ REM This is a comment
 REM TODO: add delay here
 ```
 ## TYPE_LOOT
-**Types out loot.bin as a string. Affected by string delay as well.**
+**Types out the entire loot.bin as a string. Affected by STRING_DELAY and HUMANIZE.**
+
+> **Note:** Disabled when an SD card is connected — in that case loot is stored on the SD hidden partition and cannot be typed out. Use `exfil` in the management console to read it instead.
 
 ```
 DELAY 5000
@@ -630,8 +632,7 @@ END_WHILE
 | `$_INITIAL_CAPSLOCK` | `SAVE_HOST_KEYBOARD_STATE` | CapsLock state at save time |
 | `$_INITIAL_NUMLOCK` | `SAVE_HOST_KEYBOARD_STATE` | NumLock state at save time |
 | `$_INITIAL_SCROLLLOCK` | `SAVE_HOST_KEYBOARD_STATE` | ScrollLock state at save time |
-| `$_EXFIL_MODE_ENABLED` | Script | Enables LED exfil mode if set to TRUE, disabled if set to FALSE. Make sure to add a long delay once enabled, to keep the payload running and the pico listening. |
-| `$_EXFIL_LEDS_ENABLED` | Script | Holds LED on during exfil |
+| `$_EXFIL_MODE_ENABLED` | Script | Set `TRUE` to enable exfil mode — the Pico watches for `EXFIL:<hex>` packets from `exfil_send.py` over CDC serial and appends them to loot.bin. Set `FALSE` to stop. Add a long `DELAY` after enabling to keep the payload running. |
 
 ---
 
@@ -687,9 +688,8 @@ STRINGLN notepad
 ---
 
 ## STRING_DELAY
-**Set a per-character delay (ms) for all subsequent STRING and STRINGLN commands.**
-Set to `0` to restore the default adaptive delays.
-Useful for slow targets or evading typing-speed detection heuristics.
+**Set a fixed per-character delay (ms) for all subsequent STRING and STRINGLN commands.**
+Set to `0` to restore the default timing. When set, overrides `HUMANIZE` entirely.
 
 ```
 STRING_DELAY <ms>
@@ -699,12 +699,76 @@ STRING_DELAY <ms>
 STRING_DELAY 100     REM 100ms between every character
 STRING Hello         REM types slowly: H...e...l...l...o
 
-STRING_DELAY 0       REM reset to default adaptive timing
-STRING fast now      REM back to normal speed
+STRING_DELAY 0       REM reset — humanize (if on) takes over again
+STRING fast now      REM back to humanized or default timing
+```
 
-REM slow typing looks more human:
-STRING_DELAY RANDOM_INT(30, 120)
-STRING This looks like a human typed it
+---
+
+## HUMANIZE
+**Enable or disable human-like typing variation for all subsequent STRING and STRINGLN commands.**
+Off by default. When enabled, each character is typed with natural timing variation:
+variable delays by character type, word-boundary pauses, and occasional bursts.
+`STRING_DELAY` takes priority over `HUMANIZE` — if both are set, `STRING_DELAY` wins.
+
+```
+HUMANIZE
+HUMANIZE ON
+HUMANIZE OFF
+```
+
+```
+HUMANIZE ON
+STRING Hello, World!
+REM types with natural human-like rhythm
+
+HUMANIZE OFF
+STRING supersecretpassword123
+REM types at fixed default speed (no variation)
+```
+
+---
+
+## HUMANIZE_WPM
+**Enable human-like typing and set the target speed in words per minute.**
+Valid range: 10–300 WPM. Default is 60 WPM when HUMANIZE is used without HUMANIZE_WPM.
+Implicitly enables `HUMANIZE ON`.
+
+Average timing per character scales automatically — word boundaries, punctuation, and
+shifted characters each get proportional extra delay.
+
+```
+HUMANIZE_WPM <wpm>
+```
+
+| WPM | Approximate feel |
+|-----|-----------------|
+| 20  | Slow, hunt-and-peck typist |
+| 40  | Casual typist |
+| 60  | Average office typist (default) |
+| 80  | Above average |
+| 120 | Fast touch typist |
+| 200 | Very fast (still has jitter) |
+
+```
+REM type at 40 WPM — slow casual typist
+HUMANIZE_WPM 40
+STRING Hello there
+
+REM speed up for a password (looks like muscle memory)
+HUMANIZE_WPM 100
+STRING P@ssw0rd!
+
+REM turn off humanize entirely for speed-critical section
+HUMANIZE OFF
+STRING extremely long string that needs to be fast
+HUMANIZE_WPM 60   REM re-enable at 60 WPM
+
+REM combine with RANDOMIZE for varying speed each run:
+RANDOMIZE
+VAR $wpm = RANDOM_INT(45, 80)
+$_HUMANIZE_WPM = $wpm
+STRING This is typed at a random WPM each run
 ```
 
 ---
@@ -884,6 +948,8 @@ to read in any expression or condition. They extend the original built-in variab
 | `$_HOST_OS` | Script (read/write) | Set manually: `"WINDOWS"` / `"MACOS"` / `"LINUX"` / `"UNKNOWN"` |
 | `$_ACTIVE_LAYOUT` | `DUCKY_LANG` | Current layout identifier, e.g. `"US"`, `"DE"` |
 | `$_BUTTON_ELAPSED_MS` | `WAIT_FOR_BUTTON` | Ms the button was held during the last `WAIT_FOR_BUTTON` call |
+| `$_HUMANIZE` | Script (read/write) | Set `TRUE`/`FALSE` to enable/disable human-like typing variation |
+| `$_HUMANIZE_WPM` | Script (read/write) | Target WPM for humanized typing. Setting this also enables humanize. Range: 10–300 |
 
 ```
 REM check if CapsLock is on (bit 1 of bitmask):

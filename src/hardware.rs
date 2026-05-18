@@ -17,11 +17,10 @@ pub static EXFIL_LEDS_ENABLED: Signal<CriticalSectionRawMutex, bool>         = S
 // Payload selector
 // ---------------------------------------------------------------------------
 
-pub fn select_payload(p1: &Input, p2: &Input, p3: &Input, p4: &Input) -> &'static str {
-    if p1.is_low()      { "payload.dd"  }
+pub fn select_payload(p1: &Input, p2: &Input, p3: &Input) -> &'static str {
+    if      p1.is_low() { "payload.dd"  }
     else if p2.is_low() { "payload2.dd" }
     else if p3.is_low() { "payload3.dd" }
-    else if p4.is_low() { "payload3.dd" }  // p4 now maps to payload3.dd (payload4 removed)
     else                { "payload.dd"  }
 }
 
@@ -70,7 +69,6 @@ pub async fn button_task(
     p1: Input<'static>,
     p2: Input<'static>,
     p3: Input<'static>,
-    p4: Input<'static>,
 ) {
     info!("button_task started (GP22)");
     const DEBOUNCE_MS: u64 = 20;
@@ -92,7 +90,7 @@ pub async fn button_task(
         if WAIT_BUTTON_SIGNAL.signaled() {
             WAIT_BUTTON_SIGNAL.signal(elapsed_ms);
         } else {
-            let payload = select_payload(&p1, &p2, &p3, &p4);
+            let payload = select_payload(&p1, &p2, &p3);
             info!("Triggering payload: {}", payload);
             SCRIPT_SIGNAL.try_send(payload).ok();
         }

@@ -24,7 +24,7 @@ use embedded_hal::spi::SpiDevice;
 use embedded_sdmmc::{SdCard, VolumeManager, VolumeIdx, Mode, TimeSource, Timestamp};
 
 pub const MAX_PAYLOAD_BYTES: usize = 256 * 1024;
-pub const DATA_BUF_SIZE:     usize = 65536;
+pub const DATA_BUF_SIZE:     usize = 32768;  // 32KB — saves 32KB RAM vs 64KB
 const FLASH_SIZE:  usize = 2 * 1024 * 1024;
 const MAGIC:       u32   = 0xDDDD_DDDD;
 const SLOT_SIZE: usize = 256 * 1024;
