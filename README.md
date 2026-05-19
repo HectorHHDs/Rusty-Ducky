@@ -37,7 +37,7 @@ Implements the full DuckyScript 3.0 interpreter, a big improvement from the orig
 | SCK (CLK)   -> | GP18      | Pin 24              |
 | MOSI (DI)   -> | GP19      | Pin 25              |
 
-**SD card is fully optional.**
+**SD card is fully optional. Currently untested**
 
 A few notes:
 Use 3.3V not 5V. The Pico runs at 3.3V and so do most SD card modules. If you're using a bare SD card breakout (not a module), SD cards technically run on 3.3V natively so no level shifting is needed. If you're using a 5V Arduino-style SD module, it has its own regulator and level shifter on board — power it from VSYS (Pin 39, ~5V from USB) instead of 3V3, but still connect the signal lines directly to the GP pins.
