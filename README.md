@@ -23,7 +23,7 @@ Implements the full DuckyScript 3.0 interpreter, a big improvement from the orig
 | GP4  | Payload 1 select | Short to GND = payload.dd                                                 |
 | GP5  | Payload 2 select | Short to GND = payload2.dd                                                |
 | GP10 | Payload 3 select | Short to GND = payload3.dd                                                |
-| GP11 | Payload 4 select | Short to GND = Hidden storage mode only (applicable if you have an SD card connected, shows a hidden partition where you can put payloads and such) |
+| GP11 | Hidden Storage view | Short to GND = Hidden storage mode only (applicable if you have an SD card connected, shows a hidden partition where you can put payloads and such) |
 | GP0  | Programming mode | Short to GND = don't run payload, defaults to ATTACKMODE TERMINAL         |
 
 ## How to install an SD card onto your pico:
@@ -37,7 +37,7 @@ Implements the full DuckyScript 3.0 interpreter, a big improvement from the orig
 | SCK (CLK)   -> | GP18      | Pin 24              |
 | MOSI (DI)   -> | GP19      | Pin 25              |
 
-**SD card is fully optional.**
+**SD card is fully optional. Currently untested**
 
 A few notes:
 Use 3.3V not 5V. The Pico runs at 3.3V and so do most SD card modules. If you're using a bare SD card breakout (not a module), SD cards technically run on 3.3V natively so no level shifting is needed. If you're using a 5V Arduino-style SD module, it has its own regulator and level shifter on board — power it from VSYS (Pin 39, ~5V from USB) instead of 3V3, but still connect the signal lines directly to the GP pins.
