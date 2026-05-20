@@ -71,7 +71,14 @@ pub async fn button_task(
     p3: Input<'static>,
 ) {
     info!("button_task started (GP22)");
-    const DEBOUNCE_MS: u64 = 20;
+    const DEBOUNCE_MS: u64 = 80;
+
+
+    // Ensure pin starts high before waiting for edges
+    while button.is_low() {
+        button.wait_for_rising_edge().await;
+        Timer::after(Duration::from_millis(DEBOUNCE_MS)).await;
+    }
 
     loop {
         button.wait_for_falling_edge().await;
@@ -89,7 +96,11 @@ pub async fn button_task(
 
         if WAIT_BUTTON_SIGNAL.signaled() {
             WAIT_BUTTON_SIGNAL.signal(elapsed_ms);
+        } else if crate::ducky::PAYLOAD_RUNNING.load(core::sync::atomic::Ordering::Relaxed) {
+            info!("Payload already running, ignoring button press");
         } else {
+            // Drain any stale queued signals before sending a new one
+            while SCRIPT_SIGNAL.try_receive().is_ok() {}
             let payload = select_payload(&p1, &p2, &p3);
             info!("Triggering payload: {}", payload);
             SCRIPT_SIGNAL.try_send(payload).ok();

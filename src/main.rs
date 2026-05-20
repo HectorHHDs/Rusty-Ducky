@@ -135,27 +135,28 @@ async fn main(spawner: Spawner) {
         }
     };
 
-    // Boot mode + payload selector pins
+    // Read all GPIO pins before anything else
     let prog_mode   = Input::new(p.PIN_0,  Pull::Up).is_low();
     let hidden_mode = Input::new(p.PIN_11, Pull::Up).is_low();
-    if hidden_mode {
-        crate::usb::msc::HIDDEN_MODE.store(true, core::sync::atomic::Ordering::Relaxed);
-        info!("Hidden partition mode active (GP11 grounded)");
-        crate::console_log::push("Hidden storage mode active");
-    }
     let p1 = Input::new(p.PIN_4,  Pull::Up);
     let p2 = Input::new(p.PIN_5,  Pull::Up);
     let p3 = Input::new(p.PIN_10, Pull::Up);
-    // GP4=payload.dd, GP5=payload2.dd, GP10=payload3.dd, GP11=hidden storage (not payload)
     let boot_payload: &'static str = match (p1.is_low(), p2.is_low(), p3.is_low()) {
         (true,_,_) => "payload.dd",
         (_,true,_) => "payload2.dd",
         (_,_,true) => "payload3.dd",
         _          => "payload.dd",
     };
+
+    // Spawn button task immediately so it never misses a press
     spawner.spawn(hardware::button_task(
         Input::new(p.PIN_22, Pull::Up), p1, p2, p3,
     ).expect("btn"));
+
+    if hidden_mode {
+        crate::usb::msc::HIDDEN_MODE.store(true, core::sync::atomic::Ordering::Relaxed);
+        info!("Hidden partition mode active (GP11 grounded)");
+    }
 
     // Read boot payload and parse ATTACKMODE before USB starts
     // We need to wait a moment for flash_task to be ready

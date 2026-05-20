@@ -8,6 +8,9 @@ pub mod parser;
 
 use defmt::*;
 use heapless::Vec;
+use core::sync::atomic::{AtomicBool, Ordering};
+
+pub static PAYLOAD_RUNNING: AtomicBool = AtomicBool::new(false);
 
 use executor::ScriptContext;
 // ---------------------------------------------------------------------------
@@ -33,6 +36,7 @@ static mut SCRIPT_BUF_LEN: usize = 0;
 // SD payloads reuse SCRIPT_BUF — never loaded simultaneously with a running payload
 
 pub async fn run_payload(filename: &str) {
+    PAYLOAD_RUNNING.store(true, Ordering::Relaxed);
     info!("[ducky] run_payload: {}", filename);
 
     // Try SD card visible partition first (if present)
@@ -53,6 +57,7 @@ pub async fn run_payload(filename: &str) {
             Err(_) => { warn!("[ducky] SD payload not valid UTF-8"); return; }
         };
         run_script_text(script).await;
+        PAYLOAD_RUNNING.store(false, Ordering::Relaxed);
         return;
     } else {
         // Fall back to internal flash
@@ -80,6 +85,7 @@ pub async fn run_payload(filename: &str) {
     };
 
     run_script_text(script).await;
+    PAYLOAD_RUNNING.store(false, Ordering::Relaxed);
 }
 
 // ScriptContext is large — keep it static to avoid bloating the future size
